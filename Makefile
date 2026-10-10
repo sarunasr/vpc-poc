@@ -16,10 +16,10 @@ collections-build:
 	ansible-galaxy collection build --force ansible/collections/ansible_collections/homelab/system --output-path ansible/collections/dist
 
 ansible-image: collections-build
-	docker build --platform linux/amd64 -f ansible/ee/Dockerfile -t ghcr.io/sarunasr/vpc-poc-ansible-ee:1.0.0 .
+	docker build --platform linux/amd64 -f ansible/ee/Dockerfile -t ghcr.io/sarunasr/vpc-poc-ansible-ee:1.0.1 .
 
 operator-image:
-	docker build --platform linux/amd64 -f operator/Dockerfile -t ghcr.io/sarunasr/vpc-poc-operator:1.0.0 .
+	docker build --platform linux/amd64 -f operator/Dockerfile -t ghcr.io/sarunasr/vpc-poc-operator:1.0.1 .
 
 terraform-fmt:
 	terraform fmt -check -recursive terraform

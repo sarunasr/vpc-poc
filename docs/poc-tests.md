@@ -43,7 +43,7 @@ Status separates static/build checks from infrastructure acceptance tests.
   be pushed and synced.
 - Container images are built locally but have not been published; GHCR push
   was denied without credentials. The repository Actions workflow can publish
-  them on `v1.0.0` if Actions package-write permission is available. Cluster
+  them on `v1.0.1` if Actions package-write permission is available. Cluster
   execution also requires the private `ghcr-pull` Secret.
 - No Debian target VM/SSH Secret exists for end-to-end Ansible install,
   upgrade, uninstall, cron, or drift tests.

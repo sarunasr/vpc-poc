@@ -25,7 +25,9 @@ The committed root Argo CD Application watches `apps/`. Pushing changes causes
 Argo CD to create the Crossplane Application, install the Crossplane Helm
 release at 2.4.2, install provider-opentofu 1.1.9, create the `infrastructure`
 namespace, and install the Configuration CRD/operator resources. Crossplane
-uses a prior sync wave so its CRDs are ready before Argo applies the provider.
+is installed before a separate Provider child Application syncs
+`provider-opentofu`, so Argo discovers the Provider CRD only after Crossplane
+has installed it.
 
 ## Build images
 
@@ -37,9 +39,9 @@ make ansible-image
 make operator-image
 ```
 
-The sample manifests use those image names. Push the `v1.0.0` Git tag to run
+The sample manifests use those image names. Push the `v1.0.1` Git tag to run
 [the publish workflow](../.github/workflows/publish-images.yaml), which builds
-and publishes both `linux/amd64` images as `1.0.0` using the repository's
+and publishes both `linux/amd64` images as `1.0.1` using the repository's
 `GITHUB_TOKEN`. Actions must be enabled and permit `packages: write`. A private
 GHCR package is pulled using `ghcr-pull` by the controller and its Runner Jobs.
 Before either workload starts, create `ghcr-pull` in the `infrastructure`

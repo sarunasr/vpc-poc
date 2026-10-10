@@ -29,7 +29,7 @@ Not yet end-to-end verified:
 - Proxmox provisioning and state recovery: the Proxmox API token does not
   exist yet, and provider-opentofu must be granted permissions for its
   Kubernetes Secret/Lease state backend.
-- Controller and Ansible execution in MicroK8s: the `v1.0.0` Git tag must
+- Controller and Ansible execution in MicroK8s: the `v1.0.1` Git tag must
   publish both images, and the private GHCR pull Secret must exist before
   Kubernetes can start the controller or its Runner Jobs.
 - Nginx/textfile execution, role-removal cleanup, version upgrade, and full

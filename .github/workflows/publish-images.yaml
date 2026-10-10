@@ -3,7 +3,7 @@ name: Publish POC images
 on:
   push:
     tags:
-      - v1.0.0
+      - v1.0.1
 
 permissions:
   contents: read
@@ -43,7 +43,7 @@ jobs:
           file: operator/Dockerfile
           platforms: linux/amd64
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/vpc-poc-operator:1.0.0
+          tags: ghcr.io/${{ github.repository_owner }}/vpc-poc-operator:1.0.1
 
       - name: Publish Ansible execution image
         uses: docker/build-push-action@v6
@@ -52,4 +52,4 @@ jobs:
           file: ansible/ee/Dockerfile
           platforms: linux/amd64
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/vpc-poc-ansible-ee:1.0.0
+          tags: ghcr.io/${{ github.repository_owner }}/vpc-poc-ansible-ee:1.0.1
