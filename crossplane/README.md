@@ -90,9 +90,7 @@ Refresh the Secret if the repository deploy key or GitHub host keys are
 rotated.
 
 Workspaces must fetch `terraform/environments/homelab` at an immutable commit
-SHA, not a moving branch ref. When upgrading provider-opentofu, update the
-runtime configuration's Deployment selector to match the new generated
-provider revision before rolling it out.
+SHA, not a moving branch ref.
 
 ## BPG template limitations
 
