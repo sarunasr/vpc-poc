@@ -9,8 +9,6 @@ spec:
     name: default
   managementPolicies:
     - Observe
-    - Create
-    - Update
   forProvider:
     source: Remote
     module: git::ssh://git@github.com/sarunasr/vpc-poc.git?ref=fc825e888e4ca9dd45bdb54c13759e6c3e65606f

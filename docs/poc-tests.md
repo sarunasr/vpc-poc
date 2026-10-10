@@ -54,14 +54,14 @@ Status separates static/build checks from infrastructure acceptance tests.
 - A dedicated Ed25519 VM/Ansible keypair is stored in the
   `infrastructure/homelab-vm-ssh` Secret; private key material was not
   displayed or committed.
-- No OpenTofu Workspace or VM was applied. VMIDs `101`/`102`, template `9000`,
-  and Proxmox networking/storage were not changed. Effective Proxmox
-  permissions are now restricted from VMIDs `101`/`102`; VMID `201` has the
-  required POC administration privileges and template `9000` has only audit
-  and clone.
-- The configured address `10.10.10.21` did not answer limited SSH/ICMP probes
-  from the provider pod. This does not prove the address is free; confirm it
-  is reserved before enabling Workspace creation.
+- The Argo-managed Workspace failed its first VM clone with Proxmox HTTP 403:
+  missing `SDN.Use` on `/sdn/zones/localnetwork/vmbr0`. The Workspace is
+  temporarily Observe-only. VMID `201` was not created; VMIDs `101`/`102`,
+  template `9000`, and Proxmox networking/storage were not changed.
+- Effective Proxmox permissions are restricted from VMIDs `101`/`102`; VMID
+  `201` has the required POC administration privileges and template `9000`
+  has only audit/clone. Add the missing `SDN.Use` on the exact VNet path before
+  resuming provisioning.
 - No Debian target VM exists for end-to-end Ansible install, upgrade,
   uninstall, cron, or drift tests.
 - BPG provider does not document a dedicated KVM-enable/disable VM argument.

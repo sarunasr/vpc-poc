@@ -74,10 +74,12 @@ The Proxmox token Secret has been configured and authenticated successfully
 with a read-only API request. The latest effective permission check grants VM
 administration on target VMID 201, no privileges on protected VMIDs 101/102,
 and only `VM.Audit`/`VM.Clone` on template 9000. Local storage grants
-`Datastore.AllocateSpace`/`Datastore.Audit`. No Workspace or VM has been
-applied. The planned VM address `10.10.10.21` did not respond to limited
-in-cluster probes; confirm it is reserved because those probes cannot prove
-that an address is free.
+`Datastore.AllocateSpace`/`Datastore.Audit`. The Workspace object is managed
+by Argo, but no VM has been created. Its first reconcile reached Proxmox and
+clone was denied because `SDN.Use` is missing at
+`/sdn/zones/localnetwork/vmbr0`. The address `10.10.10.21` is confirmed
+reserved. The Workspace is temporarily Observe-only until that permission is
+granted.
 
 ## Module sourcing
 
