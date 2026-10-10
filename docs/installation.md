@@ -110,12 +110,13 @@ has been verified, with no effective permissions on the parent zone.
 The dedicated `infrastructure/homelab-vm-ssh` Secret already contains the
 separate VM keypair; do not reuse the GitHub deploy key. The sample uses
 Proxmox as an SSH jump host, with a separate `infrastructure/proxmox-ansible-jump`
-Secret. The jump key should be restricted in root's `authorized_keys` to TCP
-forwarding only to `10.10.10.21:22`; allow inbound SSH from the MicroK8s
-node's egress IP (`147.93.72.210`) only. Do not use the personal workstation
-private key or grant the jump key an interactive shell. The SSH key's public
-line and setup steps are provided after the Secret is created. Once the host
-key and firewall are configured, review and apply the
+Secret. Restrict its root `authorized_keys` entry with
+`restrict,port-forwarding,permitopen="10.10.10.21:22",command="/bin/false"`.
+This allows the ProxyCommand tunnel only to the VM's SSH port and rejects
+interactive or command sessions. Allow inbound SSH from the MicroK8s node's
+egress IP (`147.93.72.210`) only. Do not use the personal workstation private
+key. The SSH key's public line and setup steps are provided after the Secret
+is created. Once the host key and firewall are configured, review and apply the
 [`operator/deploy/configuration-sample.yaml`](../operator/deploy/configuration-sample.yaml)
 Configuration files are opt-in; the sample is not automatically applied.
 
