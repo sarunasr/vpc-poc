@@ -2,6 +2,8 @@ name: Publish POC images
 
 on:
   push:
+    branches:
+      - main
     tags:
       - v1.0.1
 
@@ -11,6 +13,7 @@ permissions:
 
 jobs:
   publish:
+    if: github.ref == 'refs/tags/v1.0.1'
     runs-on: ubuntu-24.04
     steps:
       - name: Check out source
@@ -53,3 +56,16 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/vpc-poc-ansible-ee:1.0.1
+
+  set-private-visibility:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Set both GHCR packages to private
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --method PATCH /user/packages/container/vpc-poc-operator/visibility \
+            -f visibility=private
+          gh api --method PATCH /user/packages/container/vpc-poc-ansible-ee/visibility \
+            -f visibility=private
