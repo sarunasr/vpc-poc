@@ -29,9 +29,10 @@ Not yet end-to-end verified:
 - Proxmox provisioning and state recovery: the Proxmox API token does not
   exist yet, and provider-opentofu must be granted permissions for its
   Kubernetes Secret/Lease state backend.
-- Controller and Ansible execution in MicroK8s: the `v1.0.1` Git tag must
-  publish both images, and the private GHCR pull Secret must exist before
-  Kubernetes can start the controller or its Runner Jobs.
+- The operator and Crossplane/provider are installed and running. The images
+  were published as `1.0.1`, but GHCR currently allows anonymous pulls; make
+  both packages private and create the `ghcr-pull` Secret before any new pods
+  need to pull them.
 - Nginx/textfile execution, role-removal cleanup, version upgrade, and full
   infrastructure lifecycle tests require a provisioned test VM and its SSH
   Secret. No VM is created or removed by this initial setup.

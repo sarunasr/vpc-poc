@@ -42,8 +42,10 @@ make operator-image
 The sample manifests use those image names. Push the `v1.0.1` Git tag to run
 [the publish workflow](../.github/workflows/publish-images.yaml), which builds
 and publishes both `linux/amd64` images as `1.0.1` using the repository's
-`GITHUB_TOKEN`. Actions must be enabled and permit `packages: write`. A private
-GHCR package is pulled using `ghcr-pull` by the controller and its Runner Jobs.
+`GITHUB_TOKEN`. Actions must be enabled and permit `packages: write`. After the
+first publish, set both packages' visibility to private in GitHub Packages; the
+workflow token cannot change the owner-level visibility setting. A private GHCR
+package is pulled using `ghcr-pull` by the controller and its Runner Jobs.
 Before either workload starts, create `ghcr-pull` in the `infrastructure`
 namespace as a `kubernetes.io/dockerconfigjson` Secret using a GitHub
 credential with read access to both packages. Use a trusted secret manager or

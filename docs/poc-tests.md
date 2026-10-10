@@ -5,9 +5,9 @@ Status separates static/build checks from infrastructure acceptance tests.
 ## Verified locally
 
 - MicroK8s `v1.35.6` is reachable using only
-  `$HOME/.kube/config-vpc-poc`; node is Ready. Argo CD root Application was
-  Healthy/Synced before these changes. No Crossplane CRDs or installation were
-  present at inspection time.
+  `$HOME/.kube/config-vpc-poc`; node is Ready. Argo CD root Application is
+  Synced/Healthy. Crossplane 2.4.2, provider-opentofu 1.1.9, and the
+  Configuration controller are running.
 - The existing Argo CD public service is unrelated to this POC; no changes to
   it were made.
 - `provider-opentofu` upstream README, v1.1.9 Workspace CRD, examples, release,
@@ -31,6 +31,11 @@ Status separates static/build checks from infrastructure acceptance tests.
   registry Secret `ghcr-pull`; unit coverage verifies the generated Job
   setting.
 - `make test` and `git diff --check` passed.
+- GitHub Actions run `38079592522` successfully published both `linux/amd64`
+  images as `1.0.1`. An anonymous manifest check confirmed the packages are
+  currently publicly readable. The attempt to change their visibility with
+  the repository-scoped `GITHUB_TOKEN` returned 404; set each package to
+  private in GitHub Packages before relying on private registry access.
 
 ## Not run / blocked
 
@@ -38,13 +43,9 @@ Status separates static/build checks from infrastructure acceptance tests.
   token, root login, SSH to Proxmox, or other kubeconfig was used.
 - No OpenTofu Workspace or VM was applied. VMIDs `101`/`102`, template `9000`,
   and Proxmox networking/storage were not changed.
-- The Kubernetes cluster has not been modified with Crossplane/provider or the
-  operator yet. The proposed Argo CD declarations require the repo commit to
-  be pushed and synced.
-- Container images are built locally but have not been published; GHCR push
-  was denied without credentials. The repository Actions workflow can publish
-  them on `v1.0.1` if Actions package-write permission is available. Cluster
-  execution also requires the private `ghcr-pull` Secret.
+- The GHCR pull Secret `ghcr-pull` has not been created. The controller image
+  is currently cached/running after an anonymous pull; create the Secret before
+  restarting it or running Ansible Jobs once package visibility is private.
 - No Debian target VM/SSH Secret exists for end-to-end Ansible install,
   upgrade, uninstall, cron, or drift tests.
 - BPG provider does not document a dedicated KVM-enable/disable VM argument.
