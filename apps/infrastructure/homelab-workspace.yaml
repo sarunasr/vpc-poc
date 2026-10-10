@@ -9,9 +9,11 @@ spec:
     name: default
   managementPolicies:
     - Observe
+    - Create
+    - Update
   forProvider:
     source: Remote
-    module: git::ssh://git@github.com/sarunasr/vpc-poc.git//terraform/environments/homelab?ref=580ea3cb925d5f0105202ceb3e66f520061c0c3e
+    module: git::ssh://git@github.com/sarunasr/vpc-poc.git//terraform/environments/homelab?ref=4fd970e
     remotePullPolicy: Always
     env:
       - name: TF_VAR_proxmox_api_token

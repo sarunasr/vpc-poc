@@ -98,13 +98,12 @@ The homelab Terraform root uses VMID 201 and address `10.10.10.21/24` as
 example values. Verify they are unused before applying. It clones, never
 recreates, template `9000`; Proxmox remains responsible for Cloud-Init.
 `prevent_destroy` is a second guard against Terraform destroying the guest.
-The prepared [`homelab Workspace`](../crossplane/workspaces/homelab.yaml) pins
-the module to an immutable Git revision and uses the Kubernetes state backend.
-It is intentionally outside `apps/` and Observe-only. Verify the address is
-free and the Proxmox token cannot manage VMIDs `101`/`102` or modify template
-`9000`, then explicitly enable Create/Update and add it to the Argo-managed
-tree to begin provisioning. It reads credentials from Kubernetes Secrets; do
-not add fake credential values.
+The Argo-managed [`homelab Workspace`](../apps/infrastructure/homelab-workspace.yaml)
+pins the module to an immutable Git revision, uses the Kubernetes state
+backend, and omits `Delete` from its management policies. The target address
+has been confirmed reserved, and the Proxmox token cannot manage VMIDs
+`101`/`102` or modify template `9000`. It reads credentials from Kubernetes
+Secrets; do not add fake credential values.
 
 The dedicated `infrastructure/homelab-vm-ssh` Secret already contains the
 separate VM keypair; do not reuse the GitHub deploy key. After the Workspace
