@@ -7,7 +7,7 @@ spec:
   target:
     host: 10.10.10.21
     user: debian
-    sshSecretRef: web01-ssh
+    sshSecretRef: homelab-vm-ssh
   infrastructureRef:
     workspaceName: homelab
   ansible:

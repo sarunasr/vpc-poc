@@ -98,19 +98,20 @@ The homelab Terraform root uses VMID 201 and address `10.10.10.21/24` as
 example values. Verify they are unused before applying. It clones, never
 recreates, template `9000`; Proxmox remains responsible for Cloud-Init.
 `prevent_destroy` is a second guard against Terraform destroying the guest.
-Add a reviewed namespaced Workspace to `apps/` that references the
-module/root in this repository at an immutable Git revision, sets
-`managementPolicies` without `Delete`, passes token values from a Secret, and
-uses the OpenTofu Kubernetes backend. Do not add a fake credential. Before
-applying it, narrow and verify the Proxmox token ACL so it cannot manage
-VMIDs `101`/`102` or modify template `9000`.
+The prepared [`homelab Workspace`](../crossplane/workspaces/homelab.yaml) pins
+the module to an immutable Git revision and uses the Kubernetes state backend.
+It is intentionally outside `apps/` and Observe-only. Verify the address is
+free and the Proxmox token cannot manage VMIDs `101`/`102` or modify template
+`9000`, then explicitly enable Create/Update and add it to the Argo-managed
+tree to begin provisioning. It reads credentials from Kubernetes Secrets; do
+not add fake credential values.
 
-Once the Workspace is `Ready=True`, create the VM's SSH Secret in
-`infrastructure` (key `ssh-privatekey`) using a dedicated VM key, not the
-GitHub deploy key, then review and apply the
+The dedicated `infrastructure/homelab-vm-ssh` Secret already contains the
+separate VM keypair; do not reuse the GitHub deploy key. After the Workspace
+is `Ready=True`, review and apply the
 [`operator/deploy/configuration-sample.yaml`](../operator/deploy/configuration-sample.yaml)
-after substituting the actual VM address. Configuration files are opt-in;
-the sample is not automatically applied.
+after confirming the actual VM address. Configuration files are opt-in; the
+sample is not automatically applied.
 
 ## Operator lifecycle
 

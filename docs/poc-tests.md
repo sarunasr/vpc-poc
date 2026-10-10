@@ -7,7 +7,8 @@ Status separates static/build checks from infrastructure acceptance tests.
 - MicroK8s `v1.35.6` is reachable using only
   `$HOME/.kube/config-vpc-poc`; node is Ready. Argo CD root Application is
   Synced/Healthy. Crossplane 2.4.2, provider-opentofu 1.1.9, and the
-  Configuration controller are running.
+  Configuration controller are running. The provider Git runtime rollout is
+  Synced/Healthy.
 - The existing Argo CD public service is unrelated to this POC; no changes to
   it were made.
 - `provider-opentofu` upstream README, v1.1.9 Workspace CRD, examples, release,
@@ -48,12 +49,21 @@ Status separates static/build checks from infrastructure acceptance tests.
   addressed before production. Crossplane v2.4.2 adds these permissions
   unconditionally, and an external state backend does not remove them.
 - The provider Git SSH Secret has been populated from Argo CD's read-only
-  deploy key and public GitHub known-host data. The provider runtime mount and
-  an actual private-repository `git ls-remote` test are pending.
+  deploy key and public GitHub known-host data. The provider pod reports the
+  key as mode 0600, and a private-repository `git ls-remote` succeeded.
+- A dedicated Ed25519 VM/Ansible keypair is stored in the
+  `infrastructure/homelab-vm-ssh` Secret; private key material was not
+  displayed or committed.
 - No OpenTofu Workspace or VM was applied. VMIDs `101`/`102`, template `9000`,
-  and Proxmox networking/storage were not changed.
-- No Debian target VM/SSH Secret exists for end-to-end Ansible install,
-  upgrade, uninstall, cron, or drift tests.
+  and Proxmox networking/storage were not changed. Effective Proxmox
+  permissions are now restricted from VMIDs `101`/`102`; VMID `201` has the
+  required POC administration privileges and template `9000` has only audit
+  and clone.
+- The configured address `10.10.10.21` did not answer limited SSH/ICMP probes
+  from the provider pod. This does not prove the address is free; confirm it
+  is reserved before enabling Workspace creation.
+- No Debian target VM exists for end-to-end Ansible install, upgrade,
+  uninstall, cron, or drift tests.
 - BPG provider does not document a dedicated KVM-enable/disable VM argument.
   The module clones the already `kvm: 0` template and sets CPU type `qemu64`;
   verify the cloned Proxmox config before relying on it.

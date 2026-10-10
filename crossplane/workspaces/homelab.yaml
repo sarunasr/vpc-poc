@@ -1,0 +1,24 @@
+apiVersion: opentofu.m.upbound.io/v1beta1
+kind: Workspace
+metadata:
+  name: homelab
+  namespace: infrastructure
+spec:
+  providerConfigRef:
+    kind: ProviderConfig
+    name: default
+  managementPolicies:
+    - Observe
+  forProvider:
+    source: Remote
+    module: git::ssh://git@github.com/sarunasr/vpc-poc.git//terraform/environments/homelab?ref=580ea3cb925d5f0105202ceb3e66f520061c0c3e
+    remotePullPolicy: Always
+    env:
+      - name: TF_VAR_proxmox_api_token
+        secretKeyRef:
+          name: proxmox-credentials
+          key: api-token
+      - name: TF_VAR_ssh_public_keys
+        secretKeyRef:
+          name: homelab-vm-ssh
+          key: ssh-public-keys
