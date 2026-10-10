@@ -59,8 +59,17 @@ state Secret as a quick fix.
    Workspace or state as a way of deleting a VM.
 
 The exact provider ServiceAccount name is assigned at package install and
-must be checked in the target cluster; no speculative RoleBinding is installed.
-No Proxmox token exists yet, so no Workspace or VM apply is included.
+must be checked in the target cluster. The installed provider-opentofu v1.1.9
+system ClusterRole currently grants wildcard access to Secrets, ConfigMaps,
+and Leases cluster-wide. Do not create a Workspace using the Kubernetes
+backend until that access can be restricted to the `infrastructure`
+namespace; a namespaced Role alone does not narrow an existing ClusterRole.
+
+The Proxmox token Secret has been configured and authenticated successfully
+with a read-only API request. Its current ACL is broader than the POC requires:
+it grants VM administration on VMIDs 101, 102, 201, and template 9000. Narrow
+the token before provisioning so 101/102 and the template cannot be modified.
+No Workspace or VM has been applied.
 
 ## Module sourcing
 

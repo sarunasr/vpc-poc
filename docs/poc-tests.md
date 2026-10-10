@@ -14,6 +14,10 @@ Status separates static/build checks from infrastructure acceptance tests.
   and current Crossplane 2.4.2 release/chart were checked. The Workspace uses
   remote state; local provider-pod state is not persistent. Kubernetes backend
   uses Secrets plus Lease locking.
+- Proxmox token authentication succeeded with a read-only API version request
+  (HTTP 200, version 9.2.21). Read-only inventory confirmed the target node
+  contains template VMID `9000` only, with `kvm: 0`; VMID `201` was unused.
+  No Proxmox resources were changed.
 - `terraform fmt`, module init with backend disabled, and
   `terraform validate` passed with BPG provider `v0.116.0`.
 - Both Galaxy collection archives built. Both role test playbooks passed
@@ -35,8 +39,15 @@ Status separates static/build checks from infrastructure acceptance tests.
 
 ## Not run / blocked
 
-- No Proxmox API token exists in the supplied infrastructure notes. No API
-  token, root login, SSH to Proxmox, or other kubeconfig was used.
+- The configured Proxmox token currently has VM administration privileges on
+  protected VMIDs `101` and `102`, VMID `201`, and template `9000`. Narrow its
+  ACL before provisioning; no Proxmox resources were changed.
+- The installed provider-opentofu system ClusterRole grants wildcard access to
+  Secrets, ConfigMaps, and Leases cluster-wide. The Kubernetes state backend
+  cannot be used safely until this provider access is restricted to
+  `infrastructure`.
+- The private Git repository still needs a read-only credential available to
+  the provider for a pinned module revision.
 - No OpenTofu Workspace or VM was applied. VMIDs `101`/`102`, template `9000`,
   and Proxmox networking/storage were not changed.
 - No Debian target VM/SSH Secret exists for end-to-end Ansible install,
