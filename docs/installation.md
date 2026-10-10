@@ -123,7 +123,8 @@ Configuration files are opt-in; the sample is not automatically applied.
 ## Operator lifecycle
 
 Argo CD applies the CRD, scoped Role/RoleBinding, and operator Deployment from
-`apps/operator`. The image must already be available to the cluster. Generated
+`apps/operator`; the namespaced Role grants only the Lease verbs required for
+controller leader election. The image must already be available to the cluster. Generated
 Jobs run as UID 1000, drop Linux capabilities, use a read-only root filesystem,
 stage the target and optional jump SSH keys with mode `0600` into an ephemeral
 volume, and have a bounded deadline.
