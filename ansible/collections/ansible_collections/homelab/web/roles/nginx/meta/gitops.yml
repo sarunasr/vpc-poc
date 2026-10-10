@@ -1,0 +1,5 @@
+lifecycle:
+  uninstall:
+    supported: true
+    variable: nginx_state
+    value: absent

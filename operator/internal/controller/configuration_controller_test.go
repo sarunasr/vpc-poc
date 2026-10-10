@@ -1,0 +1,201 @@
+package controller
+
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+	"time"
+
+	configurationv1alpha1 "github.com/sarunasr/vpc-poc/operator/api/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+func TestDesiredRevisionIsStableAcrossMapOrdering(t *testing.T) {
+	first := configurationv1alpha1.ConfigurationSpec{
+		Target: configurationv1alpha1.TargetSpec{Host: "10.0.0.1", User: "debian"},
+		Ansible: configurationv1alpha1.AnsibleSpec{Roles: []configurationv1alpha1.RoleSpec{{
+			Name: "homelab.system.textfile",
+			Vars: map[string]interface{}{"content": "hello", "path": "/opt/hello"},
+		}}},
+	}
+	second := first
+	second.Ansible.Roles = append([]configurationv1alpha1.RoleSpec(nil), first.Ansible.Roles...)
+	second.Ansible.Roles[0].Vars = map[string]interface{}{"path": "/opt/hello", "content": "hello"}
+	firstRevision, err := desiredRevision(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondRevision, err := desiredRevision(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if firstRevision != secondRevision {
+		t.Fatalf("map ordering changed revision: %s != %s", firstRevision, secondRevision)
+	}
+}
+
+func TestDesiredRevisionChangesWithDesiredRole(t *testing.T) {
+	spec := configurationv1alpha1.ConfigurationSpec{
+		Ansible: configurationv1alpha1.AnsibleSpec{Roles: []configurationv1alpha1.RoleSpec{{Name: "homelab.web.nginx"}}},
+	}
+	first, err := desiredRevision(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec.Ansible.Roles[0].Vars = map[string]interface{}{"nginx_page_content": "changed"}
+	second, err := desiredRevision(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == second {
+		t.Fatal("desired role variables did not change configuration revision")
+	}
+}
+
+func TestScheduleIntervalRunsAtMostOneMissedOccurrence(t *testing.T) {
+	config := configurationv1alpha1.Configuration{
+		ObjectMeta: metav1.ObjectMeta{CreationTimestamp: metav1.NewTime(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))},
+		Spec: configurationv1alpha1.ConfigurationSpec{
+			Reconciliation: configurationv1alpha1.ReconciliationSpec{
+				Schedule: &configurationv1alpha1.ScheduleSpec{Type: "interval", Duration: "24h"},
+			},
+		},
+	}
+	due, _, key := scheduleDue(config, time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC))
+	if !due || key != "2026-01-02T00:00:00Z" {
+		t.Fatalf("expected a single missed occurrence, got due=%t key=%q", due, key)
+	}
+}
+
+func TestScheduleCronUsesConfiguredTimezone(t *testing.T) {
+	location, err := time.LoadLocation("Europe/Vilnius")
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := configurationv1alpha1.Configuration{
+		ObjectMeta: metav1.ObjectMeta{CreationTimestamp: metav1.NewTime(time.Date(2026, 10, 10, 4, 0, 0, 0, location))},
+		Spec: configurationv1alpha1.ConfigurationSpec{
+			Reconciliation: configurationv1alpha1.ReconciliationSpec{
+				Schedule: &configurationv1alpha1.ScheduleSpec{
+					Type: "cron", Expression: "0 8 * * *", Timezone: "Europe/Vilnius",
+				},
+			},
+		},
+	}
+	now := time.Date(2026, 10, 10, 8, 1, 0, 0, location)
+	due, _, key := scheduleDue(config, now)
+	want := time.Date(2026, 10, 10, 8, 0, 0, 0, location).Format(time.RFC3339)
+	if !due || key != want {
+		t.Fatalf("expected local cron occurrence %q, got due=%t key=%q", want, due, key)
+	}
+}
+
+func TestJobInputsAreJSONCompatibleYAMLAndIncludeSSHSettings(t *testing.T) {
+	config := &configurationv1alpha1.Configuration{
+		Spec: configurationv1alpha1.ConfigurationSpec{
+			Target: configurationv1alpha1.TargetSpec{Host: "target.example.test", User: "debian", SSHSecretRef: "vm-ssh"},
+			Ansible: configurationv1alpha1.AnsibleSpec{
+				Roles: []configurationv1alpha1.RoleSpec{{Name: "homelab.web.nginx"}},
+			},
+		},
+	}
+	playbook, inventory, _, err := jobInputs(config, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plays []map[string]interface{}
+	if err := json.Unmarshal([]byte(playbook), &plays); err != nil {
+		t.Fatalf("playbook is not valid JSON/YAML: %v", err)
+	}
+	var hosts map[string]interface{}
+	if err := json.Unmarshal([]byte(inventory), &hosts); err != nil {
+		t.Fatalf("inventory is not valid JSON/YAML: %v", err)
+	}
+	if len(plays) != 1 || len(plays[0]["roles"].([]interface{})) != 1 {
+		t.Fatalf("unexpected playbook: %s", playbook)
+	}
+	if !strings.Contains(inventory, `"ansible_host":"target.example.test"`) ||
+		!strings.Contains(inventory, "/credentials/ssh-privatekey") {
+		t.Fatalf("inventory is missing target or SSH settings: %s", inventory)
+	}
+}
+
+func TestBuildJobReferencesPrivateRegistryPullSecret(t *testing.T) {
+	config := &configurationv1alpha1.Configuration{
+		ObjectMeta: metav1.ObjectMeta{Name: "example", Namespace: "infrastructure"},
+		Spec: configurationv1alpha1.ConfigurationSpec{
+			Target: configurationv1alpha1.TargetSpec{Host: "target.example.test"},
+		},
+	}
+	job := buildJob(config, "example-job", strings.Repeat("a", 64), "ghcr.io/example/runner:1.0.0")
+	if len(job.Spec.Template.Spec.ImagePullSecrets) != 1 ||
+		job.Spec.Template.Spec.ImagePullSecrets[0].Name != imagePullSecretName {
+		t.Fatalf("job does not reference private registry secret %q: %#v", imagePullSecretName, job.Spec.Template.Spec.ImagePullSecrets)
+	}
+}
+
+func TestRemovedNginxRoleUsesSupportedUninstallMetadata(t *testing.T) {
+	config := &configurationv1alpha1.Configuration{
+		Spec: configurationv1alpha1.ConfigurationSpec{
+			Target: configurationv1alpha1.TargetSpec{Host: "10.0.0.5", User: "debian", SSHSecretRef: "vm-ssh"},
+			Ansible: configurationv1alpha1.AnsibleSpec{
+				Collections: []configurationv1alpha1.CollectionSpec{{Name: "homelab.web", Version: "1.0.0"}},
+				Lifecycle:   configurationv1alpha1.LifecycleSpec{UninstallRemovedRoles: true},
+			},
+		},
+		Status: configurationv1alpha1.ConfigurationStatus{
+			AppliedRoles:       []string{"homelab.web.nginx"},
+			AppliedCollections: []configurationv1alpha1.CollectionSpec{{Name: "homelab.web", Version: "1.0.0"}},
+		},
+	}
+	playbook, _, warnings, err := jobInputs(config, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected cleanup warnings: %v", warnings)
+	}
+	var plays []struct {
+		Roles []struct {
+			Role string                 `json:"role"`
+			Vars map[string]interface{} `json:"vars"`
+		} `json:"roles"`
+	}
+	if err := json.Unmarshal([]byte(playbook), &plays); err != nil {
+		t.Fatal(err)
+	}
+	if len(plays) != 1 || len(plays[0].Roles) != 1 ||
+		plays[0].Roles[0].Role != "homelab.web.nginx" ||
+		plays[0].Roles[0].Vars["nginx_state"] != "absent" {
+		t.Fatalf("supported uninstall was not rendered: %s", playbook)
+	}
+}
+
+func TestRemovedTextfileRoleIsSkippedWhenUninstallUnsupported(t *testing.T) {
+	config := &configurationv1alpha1.Configuration{
+		Spec: configurationv1alpha1.ConfigurationSpec{
+			Ansible: configurationv1alpha1.AnsibleSpec{
+				Collections: []configurationv1alpha1.CollectionSpec{{Name: "homelab.system", Version: "1.0.0"}},
+				Lifecycle:   configurationv1alpha1.LifecycleSpec{UninstallRemovedRoles: true},
+			},
+		},
+		Status: configurationv1alpha1.ConfigurationStatus{
+			AppliedRoles:       []string{"homelab.system.textfile"},
+			AppliedCollections: []configurationv1alpha1.CollectionSpec{{Name: "homelab.system", Version: "1.0.0"}},
+		},
+	}
+	playbook, _, warnings, err := jobInputs(config, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "uninstall is not supported") {
+		t.Fatalf("expected unsupported cleanup warning, got %v", warnings)
+	}
+	var plays []map[string]interface{}
+	if err := json.Unmarshal([]byte(playbook), &plays); err != nil {
+		t.Fatal(err)
+	}
+	if len(plays) != 1 || len(plays[0]["roles"].([]interface{})) != 0 {
+		t.Fatalf("unsupported role cleanup should not execute: %s", playbook)
+	}
+}

@@ -1,90 +1,86 @@
-# vpc-poc GitOps
+# Infrastructure GitOps POC
 
-This repository is the source of truth for workloads deployed to the MicroK8s
-cluster. Argo CD runs in the `argocd` namespace and the root Application
-watches `apps/` for Kubernetes manifests.
+A Kubernetes-native GitOps proof of concept for infrastructure and operating
+system configuration. Argo CD syncs this repository; Crossplane with
+`provider-opentofu` owns Terraform/OpenTofu infrastructure reconciliation; a
+small Go operator coordinates Ansible Runner Jobs for target configuration.
 
-## Bootstrap
+This repository does **not** install or replace the existing MicroK8s, Argo CD,
+Proxmox, Debian VM template, or network. For deployment assumptions and the
+current validation status, see [`docs/installation.md`](docs/installation.md)
+and [`docs/poc-tests.md`](docs/poc-tests.md).
 
-Argo CD is installed separately from the workload repository. To install it on
-the configured cluster:
+## Current POC status
 
-```sh
-KUBECONFIG="$HOME/.kube/config-vpc-poc"
-kubectl --kubeconfig "$KUBECONFIG" create namespace argocd \
-  --dry-run=client -o yaml | kubectl --kubeconfig "$KUBECONFIG" apply -f -
-kubectl --kubeconfig "$KUBECONFIG" apply --server-side --force-conflicts -n argocd \
-  -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.4/manifests/install.yaml
-kubectl --kubeconfig "$KUBECONFIG" -n argocd rollout status deployment/argocd-server \
-  --timeout=5m
-```
+Implemented in Git:
 
-The repository is private, so Argo CD uses a dedicated SSH deploy key with
-read-only access. The `repo-vpc-poc` Secret has already been created in the
-cluster. Add the public deploy key provided during setup in the repository's
-GitHub settings, without enabling write access. Never commit the private key.
+- Terraform VM module for the existing Debian 13 Cloud-Init template,
+  `local` storage, and `vmbr0`, with KVM acceleration not requested and
+  `prevent_destroy` protection.
+- Independently versioned `homelab.web` and `homelab.system` Ansible
+  collections and an Ansible Runner execution image build.
+- Argo CD declarations for Crossplane 2.4.2 and provider-opentofu 1.1.9.
+- A Go Configuration controller, CRD, scoped Kubernetes permissions, and
+  Ansible Job creation with deterministic revisions, interval/cron/manual
+  triggers, retry limits, and per-host/overall concurrency controls.
 
-To create or rotate the key, generate it outside the repository, register its
-public half as a read-only GitHub deploy key, then replace the cluster Secret:
+Not yet end-to-end verified:
 
-```sh
-KEY_DIR="$(mktemp -d)"
-ssh-keygen -t ed25519 -N '' -C 'argocd-vpc-poc-readonly' -f "$KEY_DIR/repo-key"
-cat "$KEY_DIR/repo-key.pub"
-# Add the printed key in GitHub before continuing.
-kubectl --kubeconfig "$HOME/.kube/config-vpc-poc" -n argocd \
-  create secret generic repo-vpc-poc \
-  --from-file=sshPrivateKey="$KEY_DIR/repo-key" \
-  --from-literal=type=git \
-  --from-literal=url=ssh://git@github.com/sarunasr/vpc-poc.git \
-  --dry-run=client -o yaml | kubectl --kubeconfig "$HOME/.kube/config-vpc-poc" \
-  apply --server-side -f -
-kubectl --kubeconfig "$HOME/.kube/config-vpc-poc" -n argocd \
-  label secret repo-vpc-poc argocd.argoproj.io/secret-type=repository
-rm "$KEY_DIR/repo-key" "$KEY_DIR/repo-key.pub"
-rmdir "$KEY_DIR"
-```
+- Proxmox provisioning and state recovery: the Proxmox API token does not
+  exist yet, and provider-opentofu must be granted permissions for its
+  Kubernetes Secret/Lease state backend.
+- Controller and Ansible execution in MicroK8s: the `v1.0.0` Git tag must
+  publish both images, and the private GHCR pull Secret must exist before
+  Kubernetes can start the controller or its Runner Jobs.
+- Nginx/textfile execution, role-removal cleanup, version upgrade, and full
+  infrastructure lifecycle tests require a provisioned test VM and its SSH
+  Secret. No VM is created or removed by this initial setup.
 
-After adding the deploy key and pushing this repository's initial commit to
-`main`, apply the root Application:
+The local verification status and blockers are documented in
+[`docs/poc-tests.md`](docs/poc-tests.md). Do not treat YAML presence as proof
+that a feature is operational.
 
-```sh
-kubectl --kubeconfig "$HOME/.kube/config-vpc-poc" apply \
-  -f bootstrap/argocd/root-application.yaml
-```
+## Repository map
 
-The root Application automatically syncs manifests, corrects drift, and prunes
-resources whose manifests are removed from `apps/`. Keep only resources you
-intend Argo CD to manage under that directory.
+- [`apps/`](apps): Argo CD-managed Kubernetes declarations.
+- [`terraform/`](terraform): reusable Proxmox VM module and homelab root module.
+- [`crossplane/`](crossplane): Crossplane/provider setup and infrastructure
+  Workspace configuration guidance.
+- [`operator/`](operator): Go Configuration API/controller and deploy manifests.
+- [`ansible/`](ansible): versioned collections, tests, and Runner image.
+- [`docs/`](docs): architecture, safety, installation and testing.
 
-## Argo CD access
+## Build and validate
 
-Argo CD is exposed over HTTPS on NodePort `30443`. Allow inbound TCP port
-`30443` to the server from your IP address in the server/provider firewall,
-then browse to <https://147.93.72.210:30443>. The browser may warn that the
-default Argo CD certificate is not trusted.
-
-Retrieve the initial admin password with:
+Required local tools: Go 1.25+, Terraform/OpenTofu, Ansible Core/Galaxy, Docker.
+The following commands do not access Proxmox or change the Kubernetes cluster:
 
 ```sh
-kubectl --kubeconfig "$HOME/.kube/config-vpc-poc" -n argocd \
-  get secret argocd-initial-admin-secret \
-  -o jsonpath='{.data.password}' | base64 --decode; echo
+make test
+make terraform-validate
+make ansible-image
+make operator-image
 ```
 
-Change the initial password after signing in.
+To install the POC after publishing the two images and supplying a dedicated
+Proxmox API token, see [`docs/installation.md`](docs/installation.md).
 
-The NodePort configuration is tracked in
-[`bootstrap/argocd/argocd-server-service.yaml`](bootstrap/argocd/argocd-server-service.yaml).
-Apply it again after reinstalling Argo CD:
+## Safety
 
-```sh
-kubectl --kubeconfig "$HOME/.kube/config-vpc-poc" apply \
-  -f bootstrap/argocd/argocd-server-service.yaml
-```
+- Use only the dedicated Proxmox API token; do not use root credentials.
+- No passwords, API tokens, or SSH private keys belong in Git.
+- Workspace deletion policy is retain/orphan by default; Terraform VM resources
+  also have `prevent_destroy`.
+- VMs are not provisioned until credentials and a reviewed Workspace manifest
+  are present.
+- Keep the existing template VMID `9000`, networking and VMIDs `101`/`102`
+  untouched.
+- The OpenTofu Kubernetes backend uses Secrets for state and Leases for locks;
+  back up the `infrastructure` namespace accordingly.
 
-## Adding services
+## Provider choice
 
-Add Kubernetes YAML manifests anywhere under `apps/` and push them to `main`.
-Argo CD recursively discovers and applies those manifests. See
-[`apps/README.md`](apps/README.md) for details.
+OpenTofu is the main POC path because a Terraform root can manage multiple
+provider types in one persistent state. A native Proxmox Crossplane provider
+is evaluated separately in [`docs/provider-comparison.md`](docs/provider-comparison.md);
+it is not installed and must not own a VM also managed by OpenTofu.

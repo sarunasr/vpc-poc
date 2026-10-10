@@ -1,0 +1,96 @@
+{
+ "files": [
+  {
+   "name": ".",
+   "ftype": "dir",
+   "chksum_type": null,
+   "chksum_sha256": null,
+   "format": 1
+  },
+  {
+   "name": "roles",
+   "ftype": "dir",
+   "chksum_type": null,
+   "chksum_sha256": null,
+   "format": 1
+  },
+  {
+   "name": "roles/textfile",
+   "ftype": "dir",
+   "chksum_type": null,
+   "chksum_sha256": null,
+   "format": 1
+  },
+  {
+   "name": "roles/textfile/tasks",
+   "ftype": "dir",
+   "chksum_type": null,
+   "chksum_sha256": null,
+   "format": 1
+  },
+  {
+   "name": "roles/textfile/tasks/main.yml",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "c03e699bb813e7a98e7ab4d85818020d64f73d1887561f28eaea6bba8f55a0ec",
+   "format": 1
+  },
+  {
+   "name": "roles/textfile/tests",
+   "ftype": "dir",
+   "chksum_type": null,
+   "chksum_sha256": null,
+   "format": 1
+  },
+  {
+   "name": "roles/textfile/tests/test.yml",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "122198bef11945577c60d892ee864825baae49ed8af357ed524ea8610631c414",
+   "format": 1
+  },
+  {
+   "name": "roles/textfile/meta",
+   "ftype": "dir",
+   "chksum_type": null,
+   "chksum_sha256": null,
+   "format": 1
+  },
+  {
+   "name": "roles/textfile/meta/gitops.yml",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "a070be01c19e7eff049c7973c61c12715e4d24984c1667782f18618caa4ed907",
+   "format": 1
+  },
+  {
+   "name": "roles/textfile/meta/main.yml",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "ba617d13494eb063c832b995287e1870f5730929032fc027c75ac734693e45ae",
+   "format": 1
+  },
+  {
+   "name": "roles/textfile/defaults",
+   "ftype": "dir",
+   "chksum_type": null,
+   "chksum_sha256": null,
+   "format": 1
+  },
+  {
+   "name": "roles/textfile/defaults/main.yml",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "0163cdc8464bd9787afc49548185b57d506adb805e8d02a00f0fcd218a4579e6",
+   "format": 1
+  },
+  {
+   "name": "README.md",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "7dcf645a6090a41f2388d7743dbbfbc06886d18da8c76f6a939b064d8bc21b52",
+   "format": 1
+  }
+ ],
+ "format": 1
+}

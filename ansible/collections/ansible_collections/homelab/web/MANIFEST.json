@@ -1,0 +1,33 @@
+{
+ "collection_info": {
+  "namespace": "homelab",
+  "name": "web",
+  "version": "1.0.0",
+  "authors": [
+   "Infrastructure GitOps maintainers"
+  ],
+  "readme": "README.md",
+  "tags": [
+   "linux",
+   "web"
+  ],
+  "description": "Web server roles for the Infrastructure GitOps POC.",
+  "license": [
+   "MIT"
+  ],
+  "license_file": null,
+  "dependencies": {},
+  "repository": "https://github.com/sarunasr/vpc-poc",
+  "documentation": null,
+  "homepage": null,
+  "issues": null
+ },
+ "file_manifest_file": {
+  "name": "FILES.json",
+  "ftype": "file",
+  "chksum_type": "sha256",
+  "chksum_sha256": "cde37aa95a8a9d5c27957a196014cafc2ee6466d0b24a9bb4288adb381585cf1",
+  "format": 1
+ },
+ "format": 1
+}

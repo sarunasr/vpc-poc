@@ -1,0 +1,16 @@
+---
+- name: Create the text file directory
+  ansible.builtin.file:
+    path: "{{ textfile_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Write the managed text file
+  ansible.builtin.copy:
+    content: "{{ textfile_content }}\n"
+    dest: "{{ textfile_path }}"
+    owner: root
+    group: root
+    mode: "0644"

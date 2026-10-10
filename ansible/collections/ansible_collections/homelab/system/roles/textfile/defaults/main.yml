@@ -1,0 +1,3 @@
+---
+textfile_path: /opt/gitops-demo/hello.txt
+textfile_content: Hello from Infrastructure GitOps!

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ansible-collection-artifacts
+  namespace: infrastructure
+data:
+  web-version: "1.0.0"
+  system-version: "1.0.0"
+  web-artifact: "homelab-web-1.0.0.tar.gz"
+  system-artifact: "homelab-system-1.0.0.tar.gz"

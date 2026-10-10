@@ -1,0 +1,32 @@
+apiVersion: infra.example.io/v1alpha1
+kind: Configuration
+metadata:
+  name: web01
+  namespace: infrastructure
+spec:
+  target:
+    host: 10.10.10.21
+    user: debian
+    sshSecretRef: web01-ssh
+  infrastructureRef:
+    workspaceName: homelab
+  ansible:
+    collections:
+      - name: homelab.web
+        version: 1.0.0
+      - name: homelab.system
+        version: 1.0.0
+    roles:
+      - name: homelab.web.nginx
+      - name: homelab.system.textfile
+    lifecycle:
+      uninstallRemovedRoles: true
+  reconciliation:
+    onChange: true
+    schedule:
+      type: interval
+      duration: 24h
+  execution:
+    maxConcurrent: 2
+    timeout: 30m
+    maxRetries: 3

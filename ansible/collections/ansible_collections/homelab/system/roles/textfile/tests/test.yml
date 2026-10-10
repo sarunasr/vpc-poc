@@ -1,0 +1,6 @@
+---
+- name: Verify homelab.system.textfile role
+  hosts: all
+  become: true
+  roles:
+    - role: textfile

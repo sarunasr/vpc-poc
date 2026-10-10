@@ -1,0 +1,16 @@
+namespace: homelab
+name: system
+version: 1.0.0
+readme: README.md
+authors:
+  - Infrastructure GitOps maintainers
+description: Basic system configuration roles for the Infrastructure GitOps POC.
+license:
+  - MIT
+tags:
+  - linux
+  - system
+dependencies: {}
+repository: https://github.com/sarunasr/vpc-poc
+build_ignore:
+  - "*.tar.gz"

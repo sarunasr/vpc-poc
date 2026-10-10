@@ -1,0 +1,4 @@
+---
+nginx_state: present
+nginx_web_root: /var/www/html
+nginx_page_content: Web is working!

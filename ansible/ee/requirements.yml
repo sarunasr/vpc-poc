@@ -1,0 +1,6 @@
+---
+collections:
+  - name: homelab.web
+    version: 1.0.0
+  - name: homelab.system
+    version: 1.0.0

@@ -1,0 +1,14 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform.tfvars
+*.auto.tfvars
+ansible/collections/ansible_collections/homelab/*/build/
+ansible/collections/dist/
+ansible/collections/ansible_collections/homelab/web/roles/nginx/tests/roles/
+ansible/collections/ansible_collections/homelab/system/roles/textfile/tests/roles/
+operator/bin/
+operator/coverage.out
+operator/config/crd/bases/
+terraform/environments/homelab/.terraform/

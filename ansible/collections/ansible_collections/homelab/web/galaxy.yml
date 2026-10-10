@@ -1,0 +1,16 @@
+namespace: homelab
+name: web
+version: 1.0.0
+readme: README.md
+authors:
+  - Infrastructure GitOps maintainers
+description: Web server roles for the Infrastructure GitOps POC.
+license:
+  - MIT
+tags:
+  - linux
+  - web
+dependencies: {}
+repository: https://github.com/sarunasr/vpc-poc
+build_ignore:
+  - "*.tar.gz"
