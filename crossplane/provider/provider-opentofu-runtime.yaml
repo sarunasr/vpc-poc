@@ -39,7 +39,12 @@ spec:
                   cp /source/known_hosts /auth/known_hosts;
                   chmod 600 /auth/id_ed25519;
                   chmod 644 /auth/known_hosts;
-                  chown 2000:2000 /auth/id_ed25519 /auth/known_hosts
+                  chown 2000:2000 /auth/id_ed25519 /auth/known_hosts;
+                  cp /etc/passwd /auth/passwd;
+                  cp /etc/group /auth/group;
+                  printf '\nprovider:x:2000:2000:provider:/tmp:/sbin/nologin\n' >> /auth/passwd;
+                  printf '\nprovider:x:2000:\n' >> /auth/group;
+                  chmod 644 /auth/passwd /auth/group
               securityContext:
                 allowPrivilegeEscalation: false
                 capabilities:
@@ -71,6 +76,14 @@ spec:
               volumeMounts:
                 - name: provider-opentofu-git-auth
                   mountPath: /var/run/provider-opentofu-git-auth
+                  readOnly: true
+                - name: provider-opentofu-git-auth
+                  mountPath: /etc/passwd
+                  subPath: passwd
+                  readOnly: true
+                - name: provider-opentofu-git-auth
+                  mountPath: /etc/group
+                  subPath: group
                   readOnly: true
                 - name: provider-opentofu-ssh-tools
                   mountPath: /var/run/provider-opentofu-ssh-tools

@@ -84,10 +84,11 @@ Argo CD's existing read-only GitHub deploy key is copied into the
 `argocd-ssh-known-hosts-cm` host keys. The
 `provider-opentofu-git` DeploymentRuntimeConfig uses an init container to
 install the Alpine OpenSSH client into an ephemeral volume and stage the key
-with SSH-safe ownership and mode. The provider mounts the staged data
-read-only and uses `GIT_SSH_COMMAND`; the private key is never placed in Git.
-Refresh the Secret if the repository deploy key or GitHub host keys are
-rotated.
+with SSH-safe ownership and mode. It also adds the provider's existing UID
+2000 to the pod-local passwd/group files because OpenSSH requires a local
+account entry. The provider mounts the staged data read-only and uses
+`GIT_SSH_COMMAND`; the private key is never placed in Git. Refresh the Secret
+if the repository deploy key or GitHub host keys are rotated.
 
 Workspaces must fetch `terraform/environments/homelab` at an immutable commit
 SHA, not a moving branch ref.

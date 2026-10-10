@@ -86,8 +86,9 @@ The provider runtime uses a read-only copy of Argo CD's GitHub SSH deploy key
 and the existing GitHub known-host data. The key is stored only in the
 `crossplane-system/provider-opentofu-git-auth` Secret. Its
 `DeploymentRuntimeConfig` init container stages the key with SSH-safe
-ownership/mode and installs the OpenSSH client into an ephemeral volume; the
-provider mounts both read-only. The key is not committed to this repository.
+ownership/mode, installs the OpenSSH client into an ephemeral volume, and adds
+the provider's UID 2000 to pod-local passwd/group files; the provider mounts
+the resulting data read-only. The key is not committed to this repository.
 Refresh the Secret if the deploy key or known-host data changes. Workspace
 module sources must pin an immutable Git commit SHA.
 
