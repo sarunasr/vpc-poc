@@ -108,11 +108,15 @@ have `SDN.Use` on `/sdn/zones/localnetwork/vmbr0`; this exact-path permission
 has been verified, with no effective permissions on the parent zone.
 
 The dedicated `infrastructure/homelab-vm-ssh` Secret already contains the
-separate VM keypair; do not reuse the GitHub deploy key. After the Workspace
-is `Ready=True`, review and apply the
+separate VM keypair; do not reuse the GitHub deploy key. Before applying the
+Configuration, ensure Ansible Job pods can reach `10.10.10.21:22`. The current
+MicroK8s cluster has no route to the private `vmbr0` subnet, and the Proxmox
+host's SSH port is not reachable from the cluster. Use a routed VPN/private
+path or a dedicated jump-host configuration; do not copy the personal SSH
+private key from the workstation into Kubernetes. Once connectivity is
+established, review and apply the
 [`operator/deploy/configuration-sample.yaml`](../operator/deploy/configuration-sample.yaml)
-after confirming the actual VM address. Configuration files are opt-in; the
-sample is not automatically applied.
+Configuration files are opt-in; the sample is not automatically applied.
 
 ## Operator lifecycle
 

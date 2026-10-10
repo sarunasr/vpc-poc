@@ -75,12 +75,16 @@ with a read-only API request. The latest effective permission check grants VM
 administration on target VMID 201, no privileges on protected VMIDs 101/102,
 and only `VM.Audit`/`VM.Clone` on template 9000. Local storage grants
 `Datastore.AllocateSpace`/`Datastore.Audit`. The Workspace object is managed
-by Argo, but no VM has been created. Its first reconcile reached Proxmox and
-clone was denied because `SDN.Use` is missing at
-`/sdn/zones/localnetwork/vmbr0`. The user granted that privilege only at the
-exact VNet path; the parent zone has no effective privileges. The address
-`10.10.10.21` is confirmed reserved. The Workspace is being resumed; no VM
-has been created yet.
+by Argo and is Ready. After the first clone attempt was denied, the user
+granted `SDN.Use` only on `/sdn/zones/localnetwork/vmbr0`; the parent zone has
+no effective privileges. VMID 201 is running from template 9000 with `kvm: 0`,
+and the OpenTofu resource state is persisted in the Kubernetes backend.
+
+The Ansible controller cannot yet reach the guest: Kubernetes pods cannot
+route to `10.10.10.21:22`, and the Proxmox host's SSH port is also unreachable
+from the cluster. No `Configuration` has been applied. Provide a routed path
+to the private VM subnet or a dedicated, reachable jump-host path before
+starting Ansible.
 
 ## Module sourcing
 

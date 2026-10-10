@@ -16,9 +16,15 @@ Status separates static/build checks from infrastructure acceptance tests.
   remote state; local provider-pod state is not persistent. Kubernetes backend
   uses Secrets plus Lease locking.
 - Proxmox token authentication succeeded with a read-only API version request
-  (HTTP 200, version 9.2.21). Read-only inventory confirmed the target node
-  contains template VMID `9000` only, with `kvm: 0`; VMID `201` was unused.
-  No Proxmox resources were changed.
+  (HTTP 200, version 9.2.21). The effective ACL grants VM administration only
+  on VMID `201`, no privileges on `101`/`102`, audit/clone on template `9000`,
+  storage allocation on `local`, and `SDN.Use` only on
+  `/sdn/zones/localnetwork/vmbr0`.
+- The Argo-managed Workspace is Ready. OpenTofu state is persisted in
+  `tfstate-homelab-homelab-proxmox`; no active Lease holder remains. VMID `201`
+  is running at `10.10.10.21`, cloned from template `9000`; its Proxmox config
+  confirms `kvm: 0`, CPU `qemu64`, 1 core, 1 GiB memory, and an 8 GiB disk.
+  VMIDs `101`/`102` and template `9000` were not changed.
 - `terraform fmt`, module init with backend disabled, and
   `terraform validate` passed with BPG provider `v0.116.0`.
 - Both Galaxy collection archives built. Both role test playbooks passed
@@ -40,9 +46,6 @@ Status separates static/build checks from infrastructure acceptance tests.
 
 ## Not run / blocked
 
-- The configured Proxmox token currently has VM administration privileges on
-  protected VMIDs `101` and `102`, VMID `201`, and template `9000`. Narrow its
-  ACL before provisioning; no Proxmox resources were changed.
 - The installed provider-opentofu system ClusterRole grants wildcard access to
   Secrets, ConfigMaps and Leases cluster-wide. This is explicitly accepted for
   this personal homelab POC; it is a known security limitation that must be
@@ -54,21 +57,17 @@ Status separates static/build checks from infrastructure acceptance tests.
 - A dedicated Ed25519 VM/Ansible keypair is stored in the
   `infrastructure/homelab-vm-ssh` Secret; private key material was not
   displayed or committed.
-- The first Argo-managed Workspace clone attempt failed with Proxmox HTTP 403
-  because `SDN.Use` was missing on `/sdn/zones/localnetwork/vmbr0`. The user
-  granted that privilege on the exact VNet path; the effective token check
-  confirms no privileges on its parent zone. VMID `201` was not created by
-  the failed attempt; VMIDs `101`/`102`, template `9000`, and
-  Proxmox networking/storage were not changed.
-- Effective Proxmox permissions are restricted from VMIDs `101`/`102`; VMID
-  `201` has the required POC administration privileges and template `9000`
-  has only audit/clone. The Workspace's Create/Update policies are being
-  restored to resume provisioning.
-- No Debian target VM exists for end-to-end Ansible install, upgrade,
-  uninstall, cron, or drift tests.
+- The guest agent confirms the VM's `10.10.10.21` address, but Kubernetes pods
+  cannot connect to guest SSH port 22; the Proxmox host's SSH port 22 is also
+  unreachable from the cluster. The VM subnet is private/NATed behind
+  `vmbr0`. No Configuration or Ansible Job has been applied. Establish a
+  routed private path or dedicated jump-host path before end-to-end
+  configuration tests.
+- Ansible install/upgrade, scheduling, collection versioning, role removal,
+  uninstall, and drift tests remain unrun until that network path is available.
 - BPG provider does not document a dedicated KVM-enable/disable VM argument.
-  The module clones the already `kvm: 0` template and sets CPU type `qemu64`;
-  verify the cloned Proxmox config before relying on it.
+  The actual clone retained `kvm: 0` and CPU type `qemu64`; verify this
+  remains true after changes to the template or module.
 
 Do not claim the final end-to-end acceptance checklist is complete until the
 blocked tests are actually executed.

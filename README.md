@@ -26,12 +26,14 @@ Implemented in Git:
 
 Not yet end-to-end verified:
 
-- Proxmox provisioning and state recovery: the Proxmox API token authenticates,
-  and its effective ACL now grants VM administration only on target VMID `201`,
-  no privileges on protected VMIDs `101`/`102`, and only audit/clone on
-  template `9000`. `SDN.Use` is now granted only on
-  `/sdn/zones/localnetwork/vmbr0`, and `10.10.10.21` is confirmed reserved.
-  The Workspace is being resumed; VMID `201` has not yet been created.
+- Terraform provisioning now succeeds: the Argo-managed Workspace is Ready,
+  state is stored in the Kubernetes backend, and VMID `201` is running with
+  `kvm: 0`. The Proxmox token has no access to VMIDs `101`/`102`, only
+  audit/clone on template `9000`, and `SDN.Use` only on the VNet.
+- Ansible end-to-end tests are blocked by network reachability. The VM is
+  confirmed at `10.10.10.21`, but Kubernetes pods cannot reach its SSH port or
+  Proxmox's SSH port; no `Configuration` has been applied. A routed private
+  subnet or a dedicated, reachable jump-host path is needed.
 - The homelab POC accepts provider-opentofu's existing cluster-wide wildcard
   access to Kubernetes Secrets, ConfigMaps and Leases. This is a known security
   limitation and must be addressed before production.
@@ -45,9 +47,9 @@ Not yet end-to-end verified:
   The `1.0.2` controller rollout is complete. The Git repository remains
   private, but published image contents are pullable by anyone.
 - Nginx/textfile execution, role-removal cleanup, version upgrade, and full
-  infrastructure lifecycle tests require a provisioned test VM. Its
-  dedicated SSH keypair is stored in Kubernetes; no VM is created or removed
-  by this initial setup.
+  configuration lifecycle tests require Kubernetes-to-VM SSH reachability.
+  The dedicated VM SSH keypair is stored in Kubernetes. Terraform VM deletion
+  remains disabled by management policy and `prevent_destroy`.
 
 The local verification status and blockers are documented in
 [`docs/poc-tests.md`](docs/poc-tests.md). Do not treat YAML presence as proof
