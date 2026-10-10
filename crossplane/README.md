@@ -95,6 +95,10 @@ if the repository deploy key or GitHub host keys are rotated.
 
 Workspaces must fetch `terraform/environments/homelab` at an immutable commit
 SHA, not a moving branch ref.
+The Workspace fetches the repository root and sets `entrypoint` to
+`terraform/environments/homelab`; this preserves the Terraform root's local
+`../../modules/proxmox-vm` reference. Do not switch the Workspace to fetching
+only the environment subdirectory unless that module dependency is changed.
 
 ## BPG template limitations
 

@@ -13,7 +13,8 @@ spec:
     - Update
   forProvider:
     source: Remote
-    module: git::ssh://git@github.com/sarunasr/vpc-poc.git//terraform/environments/homelab?ref=4fd970e
+    module: git::ssh://git@github.com/sarunasr/vpc-poc.git?ref=fc825e8
+    entrypoint: terraform/environments/homelab
     remotePullPolicy: Always
     env:
       - name: TF_VAR_proxmox_api_token
