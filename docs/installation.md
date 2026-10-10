@@ -40,11 +40,14 @@ make operator-image
 The sample manifests use those image names. Push the `v1.0.2` Git tag to run
 [the publish workflow](../.github/workflows/publish-images.yaml), which builds
 and publishes both `linux/amd64` images as `1.0.2` using the repository's
-`GITHUB_TOKEN`. Actions must be enabled and permit `packages: write`. Both GHCR
-packages are intentionally public, so the cluster does not need image-pull
-credentials. The Git repository remains private; however, the images expose the
-published binaries and embedded Ansible collections to anyone who can pull
-them. Do not include secrets in either image.
+`GITHUB_TOKEN`. Actions must be enabled and permit `packages: write`. GHCR
+`1.0.2` packages are public and do not require Kubernetes image-pull
+credentials. GHCR responds to unauthenticated manifest requests with a bearer
+challenge; clients request an anonymous pull token and then fetch the image.
+The Git repository remains private, but public images expose the published
+binaries and embedded Ansible collections to anyone who can pull them. Do not
+include secrets in either image. If a future package is created as private,
+change its visibility to Public in GitHub Packages.
 
 ## Proxmox credentials and state
 

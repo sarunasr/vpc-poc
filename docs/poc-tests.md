@@ -28,10 +28,10 @@ Status separates static/build checks from infrastructure acceptance tests.
 - Operator CRD/RBAC/Deployment passed `kubectl --dry-run=client` validation
   using the specified kubeconfig.
 - `make test` and `git diff --check` passed.
-- GitHub Actions run `38079592522` successfully published both `linux/amd64`
-  images as `1.0.1`. An anonymous manifest check confirmed the packages are
-  publicly readable, as intended. The `1.0.2` release removes references to a
-  private-registry pull Secret.
+- GitHub Actions runs `38079592522` and `38080723705` successfully published
+  both `linux/amd64` image versions, `1.0.1` and `1.0.2`. Anonymous GHCR
+  bearer-token requests for both `1.0.2` manifests returned HTTP 200. Argo
+  rolled out the `1.0.2` operator without an image-pull Secret.
 
 ## Not run / blocked
 
