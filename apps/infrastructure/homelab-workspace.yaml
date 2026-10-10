@@ -13,7 +13,7 @@ spec:
     - Update
   forProvider:
     source: Remote
-    module: git::ssh://git@github.com/sarunasr/vpc-poc.git?ref=fc825e8
+    module: git::ssh://git@github.com/sarunasr/vpc-poc.git?ref=fc825e888e4ca9dd45bdb54c13759e6c3e65606f
     entrypoint: terraform/environments/homelab
     remotePullPolicy: Always
     env:
