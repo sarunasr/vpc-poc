@@ -16,15 +16,13 @@ spec:
         app.kubernetes.io/name: configuration-controller
     spec:
       serviceAccountName: configuration-controller
-      imagePullSecrets:
-        - name: ghcr-pull
       securityContext:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
       containers:
         - name: manager
-          image: ghcr.io/sarunasr/vpc-poc-operator:1.0.1
+          image: ghcr.io/sarunasr/vpc-poc-operator:1.0.2
           imagePullPolicy: IfNotPresent
           args:
             - --metrics-bind-address=0

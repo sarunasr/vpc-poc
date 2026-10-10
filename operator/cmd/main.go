@@ -24,7 +24,7 @@ func main() {
 	var secureMetrics bool
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "Metrics listener address.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "Health probe listener address.")
-	flag.StringVar(&image, "ansible-image", "ghcr.io/sarunasr/vpc-poc-ansible-ee:1.0.1", "Immutable Ansible execution environment image.")
+	flag.StringVar(&image, "ansible-image", "ghcr.io/sarunasr/vpc-poc-ansible-ee:1.0.2", "Immutable Ansible execution environment image.")
 	flag.StringVar(&collectionVersions, "collection-versions", "homelab.web=1.0.0,homelab.system=1.0.0", "Collections and versions baked into the execution image.")
 	flag.BoolVar(&secureMetrics, "metrics-secure", true, "Serve metrics over HTTPS.")
 	opts := zap.Options{Development: false}

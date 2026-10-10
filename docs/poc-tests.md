@@ -27,15 +27,11 @@ Status separates static/build checks from infrastructure acceptance tests.
   `linux/amd64` and its `--help` smoke test passed.
 - Operator CRD/RBAC/Deployment passed `kubectl --dry-run=client` validation
   using the specified kubeconfig.
-- Operator Deployment and generated Ansible Jobs now reference the private
-  registry Secret `ghcr-pull`; unit coverage verifies the generated Job
-  setting.
 - `make test` and `git diff --check` passed.
 - GitHub Actions run `38079592522` successfully published both `linux/amd64`
   images as `1.0.1`. An anonymous manifest check confirmed the packages are
-  currently publicly readable. The attempt to change their visibility with
-  the repository-scoped `GITHUB_TOKEN` returned 404; set each package to
-  private in GitHub Packages before relying on private registry access.
+  publicly readable, as intended. The `1.0.2` release removes references to a
+  private-registry pull Secret.
 
 ## Not run / blocked
 
@@ -43,9 +39,6 @@ Status separates static/build checks from infrastructure acceptance tests.
   token, root login, SSH to Proxmox, or other kubeconfig was used.
 - No OpenTofu Workspace or VM was applied. VMIDs `101`/`102`, template `9000`,
   and Proxmox networking/storage were not changed.
-- The GHCR pull Secret `ghcr-pull` has not been created. The controller image
-  is currently cached/running after an anonymous pull; create the Secret before
-  restarting it or running Ansible Jobs once package visibility is private.
 - No Debian target VM/SSH Secret exists for end-to-end Ansible install,
   upgrade, uninstall, cron, or drift tests.
 - BPG provider does not document a dedicated KVM-enable/disable VM argument.

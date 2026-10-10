@@ -36,7 +36,6 @@ const (
 	configLabel             = "infra.example.io/configuration"
 	hostLabel               = "infra.example.io/target"
 	revisionLabel           = "infra.example.io/revision"
-	imagePullSecretName     = "ghcr-pull"
 )
 
 type ConfigurationReconciler struct {
@@ -377,7 +376,6 @@ func buildJob(config *configurationv1alpha1.Configuration, name, revision, image
 				Spec: corev1.PodSpec{
 					RestartPolicy:                corev1.RestartPolicyNever,
 					AutomountServiceAccountToken: boolPointer(false),
-					ImagePullSecrets:              []corev1.LocalObjectReference{{Name: imagePullSecretName}},
 					SecurityContext:              &corev1.PodSecurityContext{RunAsNonRoot: &runAsNonRoot, RunAsUser: &runAsUser, FSGroup: &fsGroup, SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
 					Containers: []corev1.Container{{
 						Name:            "ansible-runner",

@@ -30,9 +30,9 @@ Not yet end-to-end verified:
   exist yet, and provider-opentofu must be granted permissions for its
   Kubernetes Secret/Lease state backend.
 - The operator and Crossplane/provider are installed and running. The images
-  were published as `1.0.1`, but GHCR currently allows anonymous pulls; make
-  both packages private and create the `ghcr-pull` Secret before any new pods
-  need to pull them.
+  will move to `1.0.2` to remove private-registry references and are
+  intentionally public. The Git repository remains private, but published
+  image contents are publicly pullable.
 - Nginx/textfile execution, role-removal cleanup, version upgrade, and full
   infrastructure lifecycle tests require a provisioned test VM and its SSH
   Secret. No VM is created or removed by this initial setup.

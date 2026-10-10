@@ -120,20 +120,6 @@ func TestJobInputsAreJSONCompatibleYAMLAndIncludeSSHSettings(t *testing.T) {
 	}
 }
 
-func TestBuildJobReferencesPrivateRegistryPullSecret(t *testing.T) {
-	config := &configurationv1alpha1.Configuration{
-		ObjectMeta: metav1.ObjectMeta{Name: "example", Namespace: "infrastructure"},
-		Spec: configurationv1alpha1.ConfigurationSpec{
-			Target: configurationv1alpha1.TargetSpec{Host: "target.example.test"},
-		},
-	}
-	job := buildJob(config, "example-job", strings.Repeat("a", 64), "ghcr.io/example/runner:1.0.0")
-	if len(job.Spec.Template.Spec.ImagePullSecrets) != 1 ||
-		job.Spec.Template.Spec.ImagePullSecrets[0].Name != imagePullSecretName {
-		t.Fatalf("job does not reference private registry secret %q: %#v", imagePullSecretName, job.Spec.Template.Spec.ImagePullSecrets)
-	}
-}
-
 func TestRemovedNginxRoleUsesSupportedUninstallMetadata(t *testing.T) {
 	config := &configurationv1alpha1.Configuration{
 		Spec: configurationv1alpha1.ConfigurationSpec{
