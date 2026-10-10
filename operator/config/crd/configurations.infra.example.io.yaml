@@ -61,6 +61,29 @@ spec:
                       type: integer
                       minimum: 1
                       maximum: 65535
+                    proxyJump:
+                      type: object
+                      required:
+                        - host
+                        - user
+                        - sshSecretRef
+                      properties:
+                        host:
+                          type: string
+                          minLength: 1
+                          pattern: "^[A-Za-z0-9][A-Za-z0-9.:-]*$"
+                        user:
+                          type: string
+                          minLength: 1
+                          pattern: "^[A-Za-z_][A-Za-z0-9_-]*$"
+                        sshSecretRef:
+                          type: string
+                          minLength: 1
+                          pattern: "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                        port:
+                          type: integer
+                          minimum: 1
+                          maximum: 65535
                 infrastructureRef:
                   type: object
                   required:

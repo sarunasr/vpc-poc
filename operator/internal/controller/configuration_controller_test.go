@@ -52,6 +52,28 @@ func TestDesiredRevisionChangesWithDesiredRole(t *testing.T) {
 	}
 }
 
+func TestDesiredRevisionChangesWithProxyJump(t *testing.T) {
+	spec := configurationv1alpha1.ConfigurationSpec{
+		Target: configurationv1alpha1.TargetSpec{
+			Host: "10.0.0.1", User: "debian", SSHSecretRef: "vm-ssh",
+		},
+	}
+	directRevision, err := desiredRevision(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec.Target.ProxyJump = &configurationv1alpha1.ProxyJumpSpec{
+		Host: "bastion.example.test", User: "jump", SSHSecretRef: "jump-ssh",
+	}
+	jumpRevision, err := desiredRevision(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if directRevision == jumpRevision {
+		t.Fatal("proxy jump changes did not change configuration revision")
+	}
+}
+
 func TestScheduleIntervalRunsAtMostOneMissedOccurrence(t *testing.T) {
 	config := configurationv1alpha1.Configuration{
 		ObjectMeta: metav1.ObjectMeta{CreationTimestamp: metav1.NewTime(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))},
@@ -117,6 +139,85 @@ func TestJobInputsAreJSONCompatibleYAMLAndIncludeSSHSettings(t *testing.T) {
 	if !strings.Contains(inventory, `"ansible_host":"target.example.test"`) ||
 		!strings.Contains(inventory, "/credentials/ssh-privatekey") {
 		t.Fatalf("inventory is missing target or SSH settings: %s", inventory)
+	}
+}
+
+func TestJobInputsAndJobUseSeparateProxyJumpKey(t *testing.T) {
+	config := &configurationv1alpha1.Configuration{
+		ObjectMeta: metav1.ObjectMeta{Name: "web01", Namespace: "infrastructure"},
+		Spec: configurationv1alpha1.ConfigurationSpec{
+			Target: configurationv1alpha1.TargetSpec{
+				Host: "10.10.10.21", User: "debian", SSHSecretRef: "vm-ssh",
+				ProxyJump: &configurationv1alpha1.ProxyJumpSpec{
+					Host: "185.170.196.225", User: "root", SSHSecretRef: "jump-ssh",
+				},
+			},
+			Ansible: configurationv1alpha1.AnsibleSpec{
+				Roles: []configurationv1alpha1.RoleSpec{{Name: "homelab.web.nginx"}},
+			},
+		},
+	}
+	_, inventory, _, err := jobInputs(config, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var hosts map[string]interface{}
+	if err := json.Unmarshal([]byte(inventory), &hosts); err != nil {
+		t.Fatalf("inventory is not valid JSON/YAML: %v", err)
+	}
+	inventoryText := string(inventory)
+	if !strings.Contains(inventoryText, "ProxyCommand=ssh -F /dev/null") ||
+		!strings.Contains(inventoryText, "-i /credentials/jump/ssh-privatekey") ||
+		!strings.Contains(inventoryText, "root@185.170.196.225") ||
+		!strings.Contains(inventoryText, `"ansible_ssh_private_key_file":"/credentials/ssh-privatekey"`) {
+		t.Fatalf("inventory is missing separate target and jump SSH settings: %s", inventory)
+	}
+
+	job := buildJob(config, "web01-job", "0123456789abcdef", "runner:latest")
+	pod := job.Spec.Template.Spec
+	if len(pod.InitContainers) != 1 ||
+		!strings.Contains(pod.InitContainers[0].Args[0], "install -m 0600 /ssh-source/target/ssh-privatekey") ||
+		!strings.Contains(pod.InitContainers[0].Args[0], "install -m 0600 /ssh-source/jump/ssh-privatekey") {
+		t.Fatalf("job does not prepare the jump key with target key: %+v", pod.InitContainers)
+	}
+	secrets := map[string]string{}
+	for _, volume := range pod.Volumes {
+		if volume.Secret != nil {
+			secrets[volume.Name] = volume.Secret.SecretName
+		}
+	}
+	if secrets["ssh-key-input"] != "vm-ssh" || secrets["jump-key-input"] != "jump-ssh" {
+		t.Fatalf("job does not mount separate VM and jump key Secrets: %v", secrets)
+	}
+}
+
+func TestJobWithoutProxyJumpDoesNotMountJumpSecret(t *testing.T) {
+	config := &configurationv1alpha1.Configuration{
+		ObjectMeta: metav1.ObjectMeta{Name: "web01", Namespace: "infrastructure"},
+		Spec: configurationv1alpha1.ConfigurationSpec{
+			Target: configurationv1alpha1.TargetSpec{Host: "10.10.10.21", User: "debian", SSHSecretRef: "vm-ssh"},
+		},
+	}
+	job := buildJob(config, "web01-job", "0123456789abcdef", "runner:latest")
+	for _, volume := range job.Spec.Template.Spec.Volumes {
+		if volume.Name == "jump-key-input" {
+			t.Fatal("direct SSH job unexpectedly mounts a jump-host Secret")
+		}
+	}
+}
+
+func TestJobInputsRejectUnsafeProxyJumpValues(t *testing.T) {
+	config := &configurationv1alpha1.Configuration{
+		Spec: configurationv1alpha1.ConfigurationSpec{
+			Target: configurationv1alpha1.TargetSpec{
+				ProxyJump: &configurationv1alpha1.ProxyJumpSpec{
+					Host: "bastion;touch /tmp/unexpected", User: "root", SSHSecretRef: "jump-ssh",
+				},
+			},
+		},
+	}
+	if _, _, _, err := jobInputs(config, ""); err == nil {
+		t.Fatal("expected unsafe proxy jump host to be rejected")
 	}
 }
 

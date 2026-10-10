@@ -33,6 +33,7 @@ Status separates static/build checks from infrastructure acceptance tests.
   `2.18.6`, and successfully syntax-checks a collection role.
 - Operator unit tests cover stable/effective hashing, interval missed-run
   behavior, local-time cron behavior, Runner inventory/playbook generation,
+  separate and safely staged ProxyJump keys, unsafe jump setting rejection,
   supported Nginx cleanup, and safe skipping for unsupported textfile cleanup.
 - `go test ./...` and `go vet ./...` passed. The operator image built for
   `linux/amd64` and its `--help` smoke test passed.
@@ -60,9 +61,9 @@ Status separates static/build checks from infrastructure acceptance tests.
 - The guest agent confirms the VM's `10.10.10.21` address, but Kubernetes pods
   cannot connect to guest SSH port 22; the Proxmox host's SSH port 22 is also
   unreachable from the cluster. The VM subnet is private/NATed behind
-  `vmbr0`. No Configuration or Ansible Job has been applied. Establish a
-  routed private path or dedicated jump-host path before end-to-end
-  configuration tests.
+  `vmbr0`. The Configuration sample supports a dedicated jump host, but the
+  Proxmox SSH firewall and restricted jump key must be configured before
+  applying it. No Configuration or Ansible Job has been applied.
 - Ansible install/upgrade, scheduling, collection versioning, role removal,
   uninstall, and drift tests remain unrun until that network path is available.
 - BPG provider does not document a dedicated KVM-enable/disable VM argument.

@@ -8,6 +8,10 @@ spec:
     host: 10.10.10.21
     user: debian
     sshSecretRef: homelab-vm-ssh
+    proxyJump:
+      host: 185.170.196.225
+      user: root
+      sshSecretRef: proxmox-ansible-jump
   infrastructureRef:
     workspaceName: homelab
   ansible:

@@ -14,6 +14,11 @@ spec:
     host: 10.10.10.21
     user: debian
     sshSecretRef: web01-ssh
+    # Optional; use a separate Secret for the jump host's SSH key.
+    proxyJump:
+      host: 185.170.196.225
+      user: root
+      sshSecretRef: proxmox-ansible-jump
   infrastructureRef:
     workspaceName: homelab
   ansible:
@@ -46,6 +51,10 @@ The example CR is stored at
 and is not synced automatically. `target.sshSecretRef` must refer to a Secret in
 the Configuration namespace containing key `ssh-privatekey`. Avoid putting
 secret values in role vars: Job playbooks are mounted from ConfigMaps.
+When `target.proxyJump` is set, its separate Secret must also contain
+`ssh-privatekey`; Jobs use that key only for the SSH tunnel to the jump host.
+The Configuration includes jump host connection details in its desired
+revision.
 
 `infrastructureRef.workspaceName` is optional for physical hosts. When set, the
 controller waits for that namespaced `opentofu.m.upbound.io/Workspace` to

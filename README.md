@@ -32,8 +32,9 @@ Not yet end-to-end verified:
   audit/clone on template `9000`, and `SDN.Use` only on the VNet.
 - Ansible end-to-end tests are blocked by network reachability. The VM is
   confirmed at `10.10.10.21`, but Kubernetes pods cannot reach its SSH port or
-  Proxmox's SSH port; no `Configuration` has been applied. A routed private
-  subnet or a dedicated, reachable jump-host path is needed.
+  Proxmox's SSH port; no `Configuration` has been applied. The sample now
+  supports Proxmox as a dedicated SSH jump host; cluster egress access and a
+  forwarding-restricted jump key still need to be configured.
 - The homelab POC accepts provider-opentofu's existing cluster-wide wildcard
   access to Kubernetes Secrets, ConfigMaps and Leases. This is a known security
   limitation and must be addressed before production.

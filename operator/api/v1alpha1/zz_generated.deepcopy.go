@@ -9,6 +9,10 @@ func (in *Configuration) DeepCopyInto(out *Configuration) {
 	*out = *in
 	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
 	out.Spec.Target = in.Spec.Target
+	if in.Spec.Target.ProxyJump != nil {
+		out.Spec.Target.ProxyJump = new(ProxyJumpSpec)
+		*out.Spec.Target.ProxyJump = *in.Spec.Target.ProxyJump
+	}
 	if in.Spec.Infrastructure != nil {
 		out.Spec.Infrastructure = new(InfrastructureRef)
 		*out.Spec.Infrastructure = *in.Spec.Infrastructure

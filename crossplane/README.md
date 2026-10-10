@@ -82,9 +82,10 @@ and the OpenTofu resource state is persisted in the Kubernetes backend.
 
 The Ansible controller cannot yet reach the guest: Kubernetes pods cannot
 route to `10.10.10.21:22`, and the Proxmox host's SSH port is also unreachable
-from the cluster. No `Configuration` has been applied. Provide a routed path
-to the private VM subnet or a dedicated, reachable jump-host path before
-starting Ansible.
+from the cluster. No `Configuration` has been applied. The Configuration
+sample supports a dedicated Proxmox SSH jump host; allow cluster egress to
+host port 22 and install the forwarding-restricted jump key before starting
+Ansible.
 
 ## Module sourcing
 

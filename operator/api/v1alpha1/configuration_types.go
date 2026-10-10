@@ -27,6 +27,14 @@ type ConfigurationSpec struct {
 }
 
 type TargetSpec struct {
+	Host         string         `json:"host"`
+	User         string         `json:"user"`
+	SSHSecretRef string         `json:"sshSecretRef"`
+	Port         int32          `json:"port,omitempty"`
+	ProxyJump    *ProxyJumpSpec `json:"proxyJump,omitempty"`
+}
+
+type ProxyJumpSpec struct {
 	Host         string `json:"host"`
 	User         string `json:"user"`
 	SSHSecretRef string `json:"sshSecretRef"`

@@ -37,11 +37,11 @@ make ansible-image
 make operator-image
 ```
 
-The sample manifests use those image names. Push the `v1.0.2` Git tag to run
+The sample manifests use those image names. Push the `v1.0.3` Git tag to run
 [the publish workflow](../.github/workflows/publish-images.yaml), which builds
-and publishes both `linux/amd64` images as `1.0.2` using the repository's
+and publishes both `linux/amd64` images as `1.0.3` using the repository's
 `GITHUB_TOKEN`. Actions must be enabled and permit `packages: write`. GHCR
-`1.0.2` packages are public and do not require Kubernetes image-pull
+`1.0.3` packages are public and do not require Kubernetes image-pull
 credentials. GHCR responds to unauthenticated manifest requests with a bearer
 challenge; clients request an anonymous pull token and then fetch the image.
 The Git repository remains private, but public images expose the published
@@ -108,13 +108,14 @@ have `SDN.Use` on `/sdn/zones/localnetwork/vmbr0`; this exact-path permission
 has been verified, with no effective permissions on the parent zone.
 
 The dedicated `infrastructure/homelab-vm-ssh` Secret already contains the
-separate VM keypair; do not reuse the GitHub deploy key. Before applying the
-Configuration, ensure Ansible Job pods can reach `10.10.10.21:22`. The current
-MicroK8s cluster has no route to the private `vmbr0` subnet, and the Proxmox
-host's SSH port is not reachable from the cluster. Use a routed VPN/private
-path or a dedicated jump-host configuration; do not copy the personal SSH
-private key from the workstation into Kubernetes. Once connectivity is
-established, review and apply the
+separate VM keypair; do not reuse the GitHub deploy key. The sample uses
+Proxmox as an SSH jump host, with a separate `infrastructure/proxmox-ansible-jump`
+Secret. The jump key should be restricted in root's `authorized_keys` to TCP
+forwarding only to `10.10.10.21:22`; allow inbound SSH from the MicroK8s
+node's egress IP (`147.93.72.210`) only. Do not use the personal workstation
+private key or grant the jump key an interactive shell. The SSH key's public
+line and setup steps are provided after the Secret is created. Once the host
+key and firewall are configured, review and apply the
 [`operator/deploy/configuration-sample.yaml`](../operator/deploy/configuration-sample.yaml)
 Configuration files are opt-in; the sample is not automatically applied.
 
@@ -123,7 +124,8 @@ Configuration files are opt-in; the sample is not automatically applied.
 Argo CD applies the CRD, scoped Role/RoleBinding, and operator Deployment from
 `apps/operator`. The image must already be available to the cluster. Generated
 Jobs run as UID 1000, drop Linux capabilities, use a read-only root filesystem,
-mount only the target SSH Secret, and have a bounded deadline.
+stage the target and optional jump SSH keys with mode `0600` into an ephemeral
+volume, and have a bounded deadline.
 
 Read [Configuration](configuration.md), [scheduling](reconciliation.md),
 [Ansible versioning](ansible-lifecycle.md), and [troubleshooting](troubleshooting.md)

@@ -348,10 +348,6 @@ func buildJob(config *configurationv1alpha1.Configuration, name, revision, image
 	if len(targetName) > 63 {
 		targetName = hostHash(targetName)
 	}
-	port := config.Spec.Target.Port
-	if port <= 0 {
-		port = 22
-	}
 	deadline := int64(1800)
 	if config.Spec.Execution.Timeout.Duration > 0 {
 		deadline = int64(config.Spec.Execution.Timeout.Duration.Seconds())
@@ -365,6 +361,21 @@ func buildJob(config *configurationv1alpha1.Configuration, name, revision, image
 	allowEscalation := false
 	readOnlyRootFS := true
 	mode := int32(0440)
+	volumes := []corev1.Volume{
+		{Name: "runner-data", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		{Name: "project", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: name}, Items: []corev1.KeyToPath{{Key: "site.yml", Path: "site.yml"}}, DefaultMode: &mode}}},
+		{Name: "inventory", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: name}, Items: []corev1.KeyToPath{{Key: "hosts", Path: "hosts"}}, DefaultMode: &mode}}},
+		{Name: "ssh-key-input", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: config.Spec.Target.SSHSecretRef, DefaultMode: &mode, Items: []corev1.KeyToPath{{Key: "ssh-privatekey", Path: "ssh-privatekey", Mode: &mode}}}}},
+		{Name: "ssh-keys", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		{Name: "tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+	}
+	keyInputMounts := []corev1.VolumeMount{{Name: "ssh-key-input", MountPath: "/ssh-source/target", ReadOnly: true}}
+	initCommand := "install -m 0600 /ssh-source/target/ssh-privatekey /credentials/ssh-privatekey"
+	if jump := config.Spec.Target.ProxyJump; jump != nil {
+		volumes = append(volumes, corev1.Volume{Name: "jump-key-input", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: jump.SSHSecretRef, DefaultMode: &mode, Items: []corev1.KeyToPath{{Key: "ssh-privatekey", Path: "ssh-privatekey", Mode: &mode}}}}})
+		keyInputMounts = append(keyInputMounts, corev1.VolumeMount{Name: "jump-key-input", MountPath: "/ssh-source/jump", ReadOnly: true})
+		initCommand += " && mkdir -p /credentials/jump && install -m 0600 /ssh-source/jump/ssh-privatekey /credentials/jump/ssh-privatekey"
+	}
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: config.Namespace, Labels: labels},
 		Spec: batchv1.JobSpec{
@@ -377,6 +388,15 @@ func buildJob(config *configurationv1alpha1.Configuration, name, revision, image
 					RestartPolicy:                corev1.RestartPolicyNever,
 					AutomountServiceAccountToken: boolPointer(false),
 					SecurityContext:              &corev1.PodSecurityContext{RunAsNonRoot: &runAsNonRoot, RunAsUser: &runAsUser, FSGroup: &fsGroup, SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
+					InitContainers: []corev1.Container{{
+						Name:            "prepare-ssh-keys",
+						Image:           image,
+						ImagePullPolicy: corev1.PullIfNotPresent,
+						Command:         []string{"/bin/sh", "-ec"},
+						Args:            []string{initCommand},
+						VolumeMounts:    append(keyInputMounts, corev1.VolumeMount{Name: "ssh-keys", MountPath: "/credentials"}),
+						SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: &allowEscalation, ReadOnlyRootFilesystem: &readOnlyRootFS, Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}},
+					}},
 					Containers: []corev1.Container{{
 						Name:            "ansible-runner",
 						Image:           image,
@@ -392,18 +412,12 @@ func buildJob(config *configurationv1alpha1.Configuration, name, revision, image
 							{Name: "runner-data", MountPath: "/runner"},
 							{Name: "project", MountPath: "/runner/project", ReadOnly: true},
 							{Name: "inventory", MountPath: "/runner/inventory", ReadOnly: true},
-							{Name: "ssh-key", MountPath: "/credentials", ReadOnly: true},
+							{Name: "ssh-keys", MountPath: "/credentials", ReadOnly: true},
 							{Name: "tmp", MountPath: "/tmp"},
 						},
 						SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: &allowEscalation, ReadOnlyRootFilesystem: &readOnlyRootFS, Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}},
 					}},
-					Volumes: []corev1.Volume{
-						{Name: "runner-data", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-						{Name: "project", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: name}, Items: []corev1.KeyToPath{{Key: "site.yml", Path: "site.yml"}}, DefaultMode: &mode}}},
-						{Name: "inventory", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: name}, Items: []corev1.KeyToPath{{Key: "hosts", Path: "hosts"}}, DefaultMode: &mode}}},
-						{Name: "ssh-key", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: config.Spec.Target.SSHSecretRef, DefaultMode: &mode, Items: []corev1.KeyToPath{{Key: "ssh-privatekey", Path: "ssh-privatekey", Mode: &mode}}}}},
-						{Name: "tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-					},
+					Volumes: volumes,
 				},
 			},
 		},
@@ -465,6 +479,18 @@ func jobInputs(config *configurationv1alpha1.Configuration, lifecycleDir string)
 	if port <= 0 {
 		port = 22
 	}
+	commonArgs := "-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10"
+	if jump := config.Spec.Target.ProxyJump; jump != nil {
+		if err := validateProxyJump(jump); err != nil {
+			return "", "", nil, err
+		}
+		jumpPort := jump.Port
+		if jumpPort <= 0 {
+			jumpPort = 22
+		}
+		proxyCommand := fmt.Sprintf("ssh -F /dev/null -i /credentials/jump/ssh-privatekey -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -p %d -W %%h:%%p %s@%s", jumpPort, jump.User, jump.Host)
+		commonArgs += " -o 'ProxyCommand=" + proxyCommand + "'"
+	}
 	inventory, err := json.Marshal(map[string]interface{}{
 		"all": map[string]interface{}{"hosts": map[string]interface{}{
 			targetName: map[string]interface{}{
@@ -472,7 +498,7 @@ func jobInputs(config *configurationv1alpha1.Configuration, lifecycleDir string)
 				"ansible_user":                 config.Spec.Target.User,
 				"ansible_port":                 port,
 				"ansible_ssh_private_key_file": "/credentials/ssh-privatekey",
-				"ansible_ssh_common_args":      "-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10",
+				"ansible_ssh_common_args":      commonArgs,
 			},
 		}},
 	})
@@ -481,6 +507,28 @@ func jobInputs(config *configurationv1alpha1.Configuration, lifecycleDir string)
 	}
 	sort.Strings(cleanupWarnings)
 	return string(playbook), string(inventory), cleanupWarnings, nil
+}
+
+var (
+	proxyJumpHostPattern   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.:-]*$`)
+	proxyJumpUserPattern   = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
+	proxyJumpSecretPattern = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
+)
+
+func validateProxyJump(jump *configurationv1alpha1.ProxyJumpSpec) error {
+	if !proxyJumpHostPattern.MatchString(jump.Host) {
+		return fmt.Errorf("proxyJump.host %q must contain only a DNS name or IP address", jump.Host)
+	}
+	if !proxyJumpUserPattern.MatchString(jump.User) {
+		return fmt.Errorf("proxyJump.user %q is not a valid SSH user", jump.User)
+	}
+	if !proxyJumpSecretPattern.MatchString(jump.SSHSecretRef) {
+		return fmt.Errorf("proxyJump.sshSecretRef %q is not a valid Secret name", jump.SSHSecretRef)
+	}
+	if jump.Port < 0 || jump.Port > 65535 {
+		return fmt.Errorf("proxyJump.port must be between 1 and 65535")
+	}
+	return nil
 }
 
 type lifecycleMetadata struct {
