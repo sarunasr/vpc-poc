@@ -24,17 +24,21 @@ Implemented in Git:
   Ansible Job creation with deterministic revisions, interval/cron/manual
   triggers, retry limits, and per-host/overall concurrency controls.
 
-Not yet end-to-end verified:
+End-to-end verified so far:
 
-- Terraform provisioning now succeeds: the Argo-managed Workspace is Ready,
-  state is stored in the Kubernetes backend, and VMID `201` is running with
-  `kvm: 0`. The Proxmox token has no access to VMIDs `101`/`102`, only
-  audit/clone on template `9000`, and `SDN.Use` only on the VNet.
-- Ansible end-to-end tests are blocked by network reachability. The VM is
-  confirmed at `10.10.10.21`, but Kubernetes pods cannot reach its SSH port or
-  Proxmox's SSH port; no `Configuration` has been applied. The sample now
-  supports Proxmox as a dedicated SSH jump host; cluster egress access and a
-  forwarding-restricted jump key still need to be configured.
+- The Argo-managed Workspace is Ready, its state is stored in the Kubernetes
+  backend, and VMID `201` is running with `kvm: 0`. The Proxmox token has no
+  access to VMIDs `101`/`102`, only audit/clone on template `9000`, and
+  `SDN.Use` only on the VNet.
+- Kubernetes Ansible Jobs connect through the dedicated Proxmox SSH jump host.
+  The first run configured the VM successfully; a 30-second scheduled run
+  completed; an unsupported collection version was rejected without starting
+  a Job; and removing the Nginx role ran its supported uninstall tasks.
+- The `web01` Configuration uses pinned `1.0.0` collections, a 24-hour
+  schedule, and `onChange`. Full 64-character applied-revision tracking is
+  verified. Reverting to a previously applied revision created a fresh
+  v1.0.6 Runner Job and successfully reinstalled Nginx; no stale Job was
+  reused.
 - The homelab POC accepts provider-opentofu's existing cluster-wide wildcard
   access to Kubernetes Secrets, ConfigMaps and Leases. This is a known security
   limitation and must be addressed before production.
@@ -43,16 +47,11 @@ Not yet end-to-end verified:
   provider-opentofu. Argo rolled out the runtime configuration, and a
   read-only `git ls-remote` to the private repository succeeded from the
   provider pod.
-- The operator and Crossplane/provider are installed and running. The images
-  are public; anonymous registry access uses GHCR's bearer-token challenge.
-  The `1.0.2` controller rollout is complete. The Git repository remains
-  private, but published image contents are pullable by anyone.
-- Nginx/textfile execution, role-removal cleanup, version upgrade, and full
-  configuration lifecycle tests require Kubernetes-to-VM SSH reachability.
-  The dedicated VM SSH keypair is stored in Kubernetes. Terraform VM deletion
-  remains disabled by management policy and `prevent_destroy`.
+- The operator and Crossplane/provider are installed and running. Published
+  GHCR images are public; the Git repository remains private. Terraform VM
+  deletion remains disabled by management policy and `prevent_destroy`.
 
-The local verification status and blockers are documented in
+The verified cases and remaining validation are tracked in
 [`docs/poc-tests.md`](docs/poc-tests.md). Do not treat YAML presence as proof
 that a feature is operational.
 

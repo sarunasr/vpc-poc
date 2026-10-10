@@ -80,12 +80,14 @@ granted `SDN.Use` only on `/sdn/zones/localnetwork/vmbr0`; the parent zone has
 no effective privileges. VMID 201 is running from template 9000 with `kvm: 0`,
 and the OpenTofu resource state is persisted in the Kubernetes backend.
 
-The Ansible controller cannot yet reach the guest: Kubernetes pods cannot
-route to `10.10.10.21:22`, and the Proxmox host's SSH port is also unreachable
-from the cluster. No `Configuration` has been applied. The Configuration
-sample supports a dedicated Proxmox SSH jump host; allow cluster egress to
-host port 22 and install the forwarding-restricted jump key before starting
-Ansible.
+The Kubernetes Ansible Runner reaches `10.10.10.21:22` through the dedicated
+Proxmox SSH jump host. The jump key is restricted to forwarding that guest's
+SSH port, and cluster egress is allowed from the MicroK8s node. The first
+Configuration run succeeded, as did a scheduled run, the unsupported
+collection-version guard, and Nginx role removal. A v1.0.6 controller fix for
+reusing a completed Job name was published and rolled out; restoring the
+original revision created a new Runner Job and successfully reinstalled
+Nginx.
 
 ## Module sourcing
 

@@ -1,74 +1,64 @@
 # POC validation record
 
-Status separates static/build checks from infrastructure acceptance tests.
+This record distinguishes completed end-to-end checks from remaining work.
 
-## Verified locally
+## Verified
 
-- MicroK8s `v1.35.6` is reachable using only
-  `$HOME/.kube/config-vpc-poc`; node is Ready. Argo CD root Application is
-  Synced/Healthy. Crossplane 2.4.2, provider-opentofu 1.1.9, and the
-  Configuration controller are running. The provider Git runtime rollout is
-  Synced/Healthy.
-- The existing Argo CD public service is unrelated to this POC; no changes to
-  it were made.
-- `provider-opentofu` upstream README, v1.1.9 Workspace CRD, examples, release,
-  and current Crossplane 2.4.2 release/chart were checked. The Workspace uses
-  remote state; local provider-pod state is not persistent. Kubernetes backend
-  uses Secrets plus Lease locking.
-- Proxmox token authentication succeeded with a read-only API version request
-  (HTTP 200, version 9.2.21). The effective ACL grants VM administration only
-  on VMID `201`, no privileges on `101`/`102`, audit/clone on template `9000`,
-  storage allocation on `local`, and `SDN.Use` only on
-  `/sdn/zones/localnetwork/vmbr0`.
-- The Argo-managed Workspace is Ready. OpenTofu state is persisted in
-  `tfstate-homelab-homelab-proxmox`; no active Lease holder remains. VMID `201`
-  is running at `10.10.10.21`, cloned from template `9000`; its Proxmox config
-  confirms `kvm: 0`, CPU `qemu64`, 1 core, 1 GiB memory, and an 8 GiB disk.
-  VMIDs `101`/`102` and template `9000` were not changed.
-- `terraform fmt`, module init with backend disabled, and
-  `terraform validate` passed with BPG provider `v0.116.0`.
-- Both Galaxy collection archives built. Both role test playbooks passed
-  Ansible syntax checking. The Ansible execution image was rebuilt for
-  `linux/amd64`; it runs as the non-root `runner` user, reports Ansible Core
-  `2.18.6`, and successfully syntax-checks a collection role.
-- Operator unit tests cover stable/effective hashing, interval missed-run
-  behavior, local-time cron behavior, Runner inventory/playbook generation,
-  separate and safely staged ProxyJump keys, unsafe jump setting rejection,
-  supported Nginx cleanup, and safe skipping for unsupported textfile cleanup.
-- `go test ./...` and `go vet ./...` passed. The operator image built for
-  `linux/amd64` and its `--help` smoke test passed.
-- Operator CRD/RBAC/Deployment passed `kubectl --dry-run=client` validation
-  using the specified kubeconfig.
-- `make test` and `git diff --check` passed.
-- GitHub Actions runs `38079592522` and `38080723705` successfully published
-  both `linux/amd64` image versions, `1.0.1` and `1.0.2`. Anonymous GHCR
-  bearer-token requests for both `1.0.2` manifests returned HTTP 200. Argo
-  rolled out the `1.0.2` operator without an image-pull Secret.
+- MicroK8s is reachable using only `$HOME/.kube/config-vpc-poc`; the node is
+  Ready and the Argo CD root Application is Synced/Healthy. Crossplane 2.4.2,
+  provider-opentofu 1.1.9, and the Configuration controller are installed.
+- Proxmox token authentication succeeded. Effective permissions allow VM
+  administration only on VMID `201`, audit/clone on template `9000`, storage
+  allocation on `local`, and `SDN.Use` only on
+  `/sdn/zones/localnetwork/vmbr0`. VMIDs `101`/`102` and template `9000` were
+  not changed.
+- The Argo-managed Workspace is Ready, with OpenTofu state persisted in the
+  Kubernetes backend. VMID `201` is running at `10.10.10.21`, cloned from
+  template `9000`; its configuration has `kvm: 0`, CPU `qemu64`, 1 core,
+  1 GiB memory, and an 8 GiB disk. No active backend Lease remains.
+- Terraform formatting, backend-disabled module initialization, and
+  validation passed with BPG provider `v0.116.0`.
+- A dedicated restricted Proxmox SSH jump key and separate VM key were used
+  from Kubernetes to authenticate to `debian@10.10.10.21`. The successful
+  SSH probe ran through the jump host without using the workstation key.
+- The first operator-managed `web01` Ansible Job succeeded: both
+  `homelab.system.textfile` and `homelab.web.nginx` ran, with 7 OK, 5 changed,
+  0 unreachable, and 0 failed tasks.
+- The operator's full 64-character `AppliedRevision` tracking was verified.
+  The `onChange` setting is enabled and the final scheduled interval is 24h.
+- Requesting unavailable collection version `homelab.web:9.9.9` set
+  `Ready=False` with reason `CollectionVersionUnavailable` and did not create
+  a Job. The supported pinned version `1.0.0` was restored.
+- With a temporary 30-second interval, the controller created and completed
+  scheduled Job `web01-0fa28220-6c05e5-1` successfully in 28 seconds.
+- Removing `homelab.web.nginx` caused the controller's supported cleanup to
+  stop and disable Nginx, remove the managed landing page, and uninstall the
+  Nginx package. The Ansible run completed with 0 unreachable and 0 failed
+  tasks. The normal 24-hour interval and both desired roles were restored.
+- Returning to a previously applied revision exposed a stale completed-Job
+  name collision. The v1.0.6 fix was published and rolled out; reverting the
+  temporary role-order change then created a fresh Job
+  (`web01-4577428e-7ec825-1`) rather than reusing the old completed Job. It
+  ran successfully with the v1.0.6 Runner, reinstalled/enabled Nginx, and
+  reported the full 64-character applied revision with both roles applied.
+- The v1.0.6 GitHub Actions image-publish workflow succeeded, Argo CD rolled
+  out the v1.0.6 controller, and the final `web01` Configuration is Synced
+  with `onChange: true`, both roles, and its 24-hour schedule. No active
+  Ansible Job remains.
+- `go test ./...`, `go vet ./...`, `make test`, and `git diff --check` passed.
+  The operator CRD, RBAC, Deployment, and sample Configuration passed
+  Kubernetes dry-run validation.
 
-## Not run / blocked
+## Remaining validation
 
-- The installed provider-opentofu system ClusterRole grants wildcard access to
-  Secrets, ConfigMaps and Leases cluster-wide. This is explicitly accepted for
-  this personal homelab POC; it is a known security limitation that must be
-  addressed before production. Crossplane v2.4.2 adds these permissions
-  unconditionally, and an external state backend does not remove them.
-- The provider Git SSH Secret has been populated from Argo CD's read-only
-  deploy key and public GitHub known-host data. The provider pod reports the
-  key as mode 0600, and a private-repository `git ls-remote` succeeded.
-- A dedicated Ed25519 VM/Ansible keypair is stored in the
-  `infrastructure/homelab-vm-ssh` Secret; private key material was not
-  displayed or committed.
-- The guest agent confirms the VM's `10.10.10.21` address, but Kubernetes pods
-  cannot connect to guest SSH port 22; the Proxmox host's SSH port 22 is also
-  unreachable from the cluster. The VM subnet is private/NATed behind
-  `vmbr0`. The Configuration sample supports a dedicated jump host, but the
-  Proxmox SSH firewall and restricted jump key must be configured before
-  applying it. No Configuration or Ansible Job has been applied.
-- Ansible install/upgrade, scheduling, collection versioning, role removal,
-  uninstall, and drift tests remain unrun until that network path is available.
-- BPG provider does not document a dedicated KVM-enable/disable VM argument.
-  The actual clone retained `kvm: 0` and CPU type `qemu64`; verify this
-  remains true after changes to the template or module.
+- A valid collection upgrade between two published collection versions and
+  deliberate guest drift correction have not been tested.
+- Destructive VM deletion has not been tested. VM deletion remains disabled
+  by management policy and `prevent_destroy`.
+- provider-opentofu's installed system ClusterRole grants wildcard access to
+  Secrets, ConfigMaps, and Leases cluster-wide. This is explicitly accepted
+  for this personal homelab POC and remains a security limitation that must
+  be addressed before production.
 
-Do not claim the final end-to-end acceptance checklist is complete until the
-blocked tests are actually executed.
+Do not treat manifest presence or a Ready status alone as proof that an
+end-to-end test passed.
