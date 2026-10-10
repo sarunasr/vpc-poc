@@ -5,32 +5,55 @@ metadata:
   namespace: infrastructure
 spec:
   target:
+    # DNS name or IP address of the managed host.
     host: 10.10.10.21
+    # Valid SSH account name.
     user: debian
+    # Kubernetes Secret in this namespace with an `ssh-privatekey` data key.
     sshSecretRef: homelab-vm-ssh
+    # Optional SSH port; valid range is 1-65535 (default: 22).
+    # port: 22
+    # Optional jump host. Omit this block to connect directly.
     proxyJump:
+      # DNS name or IP address; user must be a valid SSH account name.
       host: 185.170.196.225
       user: root
+      # Secret in this namespace with an `ssh-privatekey` data key.
       sshSecretRef: proxmox-ansible-jump
+      # Optional SSH port; valid range is 1-65535 (default: 22).
+      # port: 22
   infrastructureRef:
+    # Optional; name of an OpenTofu Workspace in this namespace.
     workspaceName: homelab
   ansible:
+    # Collection name and version must be present in the Runner image.
     collections:
-      - name: homelab.web
-        version: 1.0.0
+      # - name: homelab.web
+      #   version: 1.0.0
       - name: homelab.system
         version: 1.0.0
     roles:
-      - name: homelab.web.nginx
+      # - name: homelab.web.nginx
       - name: homelab.system.textfile
     lifecycle:
+      # true or false; supported cleanup runs when an applied role is removed.
       uninstallRemovedRoles: true
   reconciliation:
+    # true or false; run when the desired configuration changes.
     onChange: true
     schedule:
+      # Allowed values: interval, cron. Omit schedule for no periodic runs.
       type: interval
+      # For interval, use a positive Go duration (e.g. 30m, 24h).
+      # For cron, use a five-field cron expression and set timezone below.
       duration: 24h
+      # Cron only: IANA timezone (e.g. Etc/UTC, Europe/Vilnius).
+      # expression: "0 8 * * *"
+      # timezone: Europe/Vilnius
   execution:
+    # Allowed range: 1-100 concurrent Jobs.
     maxConcurrent: 2
+    # Positive Go duration; limits how long an execution Job may run.
     timeout: 30m
+    # Allowed range: 0-10; 0 uses the default of 3 retries.
     maxRetries: 3
