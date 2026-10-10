@@ -59,14 +59,12 @@ intend Argo CD to manage under that directory.
 
 ## Argo CD access
 
-The Argo CD server remains a ClusterIP service. To access the UI locally:
+Argo CD is exposed over HTTPS on NodePort `30443`. Allow inbound TCP port
+`30443` to the server from your IP address in the server/provider firewall,
+then browse to <https://147.93.72.210:30443>. The browser may warn that the
+default Argo CD certificate is not trusted.
 
-```sh
-kubectl --kubeconfig "$HOME/.kube/config-vpc-poc" -n argocd \
-  port-forward svc/argocd-server 8080:443
-```
-
-Open <https://localhost:8080>. Retrieve the initial admin password with:
+Retrieve the initial admin password with:
 
 ```sh
 kubectl --kubeconfig "$HOME/.kube/config-vpc-poc" -n argocd \
@@ -75,6 +73,15 @@ kubectl --kubeconfig "$HOME/.kube/config-vpc-poc" -n argocd \
 ```
 
 Change the initial password after signing in.
+
+The NodePort configuration is tracked in
+[`bootstrap/argocd/argocd-server-service.yaml`](bootstrap/argocd/argocd-server-service.yaml).
+Apply it again after reinstalling Argo CD:
+
+```sh
+kubectl --kubeconfig "$HOME/.kube/config-vpc-poc" apply \
+  -f bootstrap/argocd/argocd-server-service.yaml
+```
 
 ## Adding services
 
