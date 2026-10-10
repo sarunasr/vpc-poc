@@ -57,9 +57,10 @@ storage allocation, and guest-agent reads. Do not use root or place the token
 in a `.tfvars` file checked into Git.
 
 The Workspace passes its token from a Kubernetes Secret to OpenTofu using a
-Secret key reference. A ProviderConfig supplies the BPG provider configuration.
-See [`../crossplane/README.md`](../crossplane/README.md) for the POC manifests
-and backend access requirements.
+Secret key reference. The Terraform root configures the BPG provider; its
+namespaced ProviderConfig selects OpenTofu execution settings. See
+[`../crossplane/README.md`](../crossplane/README.md) for the POC manifests and
+backend access requirements.
 
 The selected OpenTofu Kubernetes backend stores state in a Secret named from
 the OpenTofu workspace and `secret_suffix`; it uses Kubernetes Lease objects
@@ -72,11 +73,23 @@ timeout can terminate a running OpenTofu operation without a clean state
 write, so choose a timeout longer than expected plans/applies and inspect
 Proxmox and state before retrying such a failure.
 
-The provider's execution ServiceAccount must be able to read/write/list the
-backend Secrets and create/read/update/delete Leases in the state namespace.
-Confirm the actual installed ServiceAccount and grant only these namespace
-permissions before creating a Workspace. Do not grant cluster-wide state
-permissions.
+The provider's execution ServiceAccount needs access to the backend Secrets
+and Leases. For this personal homelab POC, the existing provider-opentofu
+system ClusterRole's wildcard access to Secrets, ConfigMaps and Leases across
+the cluster is explicitly accepted. State is still configured in the
+`infrastructure` namespace with a dedicated suffix. This is a known security
+limitation and must be addressed before production.
+
+## Private Terraform module access
+
+The provider runtime uses a read-only copy of Argo CD's GitHub SSH deploy key
+and the existing GitHub known-host data. The key is stored only in the
+`crossplane-system/provider-opentofu-git-auth` Secret. Its
+`DeploymentRuntimeConfig` init container stages the key with SSH-safe
+ownership/mode and installs the OpenSSH client into an ephemeral volume; the
+provider mounts both read-only. The key is not committed to this repository.
+Refresh the Secret if the deploy key or known-host data changes. Workspace
+module sources must pin an immutable Git commit SHA.
 
 ## Deploy a VM
 
@@ -84,14 +97,16 @@ The homelab Terraform root uses VMID 201 and address `10.10.10.21/24` as
 example values. Verify they are unused before applying. It clones, never
 recreates, template `9000`; Proxmox remains responsible for Cloud-Init.
 `prevent_destroy` is a second guard against Terraform destroying the guest.
-When ready, add a reviewed namespaced Workspace to `apps/` that references the
+Add a reviewed namespaced Workspace to `apps/` that references the
 module/root in this repository at an immutable Git revision, sets
 `managementPolicies` without `Delete`, passes token values from a Secret, and
-uses the OpenTofu Kubernetes backend. Do not add a fake credential or apply
-until the Proxmox token Secret and provider access Role are configured.
+uses the OpenTofu Kubernetes backend. Do not add a fake credential. Before
+applying it, narrow and verify the Proxmox token ACL so it cannot manage
+VMIDs `101`/`102` or modify template `9000`.
 
 Once the Workspace is `Ready=True`, create the VM's SSH Secret in
-`infrastructure` (key `ssh-privatekey`), then review and apply the
+`infrastructure` (key `ssh-privatekey`) using a dedicated VM key, not the
+GitHub deploy key, then review and apply the
 [`operator/deploy/configuration-sample.yaml`](../operator/deploy/configuration-sample.yaml)
 after substituting the actual VM address. Configuration files are opt-in;
 the sample is not automatically applied.

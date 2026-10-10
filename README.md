@@ -26,9 +26,18 @@ Implemented in Git:
 
 Not yet end-to-end verified:
 
-- Proxmox provisioning and state recovery: the Proxmox API token does not
-  exist yet, and provider-opentofu must be granted permissions for its
-  Kubernetes Secret/Lease state backend.
+- Proxmox provisioning and state recovery: the Proxmox API token authenticates,
+  but its ACL currently grants VM administration on protected VMIDs `101` and
+  `102` and template `9000`. No Workspace or VM has been applied; narrow and
+  verify the Proxmox ACL before applying one.
+- The homelab POC accepts provider-opentofu's existing cluster-wide wildcard
+  access to Kubernetes Secrets, ConfigMaps and Leases. This is a known security
+  limitation and must be addressed before production.
+- Private module access is prepared using Argo CD's read-only SSH deploy key,
+  staged with SSH-safe permissions and mounted read-only into
+  provider-opentofu. The running provider still needs to be rolled out with
+  this runtime configuration and tested against the private repository before
+  a Workspace can be created.
 - The operator and Crossplane/provider are installed and running. The images
   are public; anonymous registry access uses GHCR's bearer-token challenge.
   The `1.0.2` controller rollout is complete. The Git repository remains
@@ -78,6 +87,9 @@ Proxmox API token, see [`docs/installation.md`](docs/installation.md).
   untouched.
 - The OpenTofu Kubernetes backend uses Secrets for state and Leases for locks;
   back up the `infrastructure` namespace accordingly.
+- provider-opentofu's cluster-wide Kubernetes Secret, ConfigMap and Lease
+  access is accepted for this personal homelab POC only; do not carry this
+  permission model into production without a security review and remediation.
 
 ## Provider choice
 

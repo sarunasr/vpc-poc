@@ -43,18 +43,13 @@ Status separates static/build checks from infrastructure acceptance tests.
   protected VMIDs `101` and `102`, VMID `201`, and template `9000`. Narrow its
   ACL before provisioning; no Proxmox resources were changed.
 - The installed provider-opentofu system ClusterRole grants wildcard access to
-  Secrets, ConfigMaps, and Leases cluster-wide. The Kubernetes state backend
-  cannot be used safely with this provider. Crossplane v2.4.2 adds these
-  permissions unconditionally; an external state backend does not remove
-  them, and patching the generated ClusterRole is not durable.
-- Evaluated the maintained Flux Tofu Controller as an alternative. It can watch
-  selected namespaces and use a runner ServiceAccount, but its default chart
-  also grants broad permissions. Achieving least privilege would require
-  replacing its default RBAC with namespace-scoped resources and adding Flux
-  source-controller for Git module sources. It has not been installed or
-  validated here.
-- The private Git repository still needs a read-only credential available to
-  whichever source/controller is selected for a pinned module revision.
+  Secrets, ConfigMaps and Leases cluster-wide. This is explicitly accepted for
+  this personal homelab POC; it is a known security limitation that must be
+  addressed before production. Crossplane v2.4.2 adds these permissions
+  unconditionally, and an external state backend does not remove them.
+- The provider Git SSH Secret has been populated from Argo CD's read-only
+  deploy key and public GitHub known-host data. The provider runtime mount and
+  an actual private-repository `git ls-remote` test are pending.
 - No OpenTofu Workspace or VM was applied. VMIDs `101`/`102`, template `9000`,
   and Proxmox networking/storage were not changed.
 - No Debian target VM/SSH Secret exists for end-to-end Ansible install,
@@ -62,8 +57,6 @@ Status separates static/build checks from infrastructure acceptance tests.
 - BPG provider does not document a dedicated KVM-enable/disable VM argument.
   The module clones the already `kvm: 0` template and sets CPU type `qemu64`;
   verify the cloned Proxmox config before relying on it.
-- Native provider comparison is a source-level evaluation only; it is not
-  installed or tested against Proxmox.
 
 Do not claim the final end-to-end acceptance checklist is complete until the
 blocked tests are actually executed.

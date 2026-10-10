@@ -48,37 +48,27 @@ state Secret as a quick fix.
    needed for the declared resources and VMID range.
 2. Store the token in a Kubernetes Secret in `infrastructure`. Supply it as a
    Workspace environment Secret reference; never render it into a manifest.
-3. Configure BPG provider `endpoint`, `api_token`, and TLS verification in the
-   ProviderConfig. Insecure TLS is only for this self-signed lab server.
-4. Inspect the installed provider ServiceAccount. Grant it only namespaced
-   `get/list/watch/create/update/patch` on state Secrets plus the minimum Lease
-   verbs required by the Kubernetes backend. Do not grant broad cluster access.
+3. The Terraform root's BPG provider block sets the endpoint and TLS
+   verification; the Workspace injects `api_token` from the Kubernetes
+   Secret. Insecure TLS is only for this self-signed lab server.
+4. For this personal homelab POC, the installed provider-opentofu v1.1.9
+   system ClusterRole's wildcard access to Secrets, ConfigMaps and Leases is
+   explicitly accepted. The Kubernetes state data still remains in
+   `infrastructure` under its dedicated backend suffix. This broad provider
+   permission is a known security limitation that must be addressed before
+   production; do not mistake it for namespace-scoped access.
 5. Configure `backend "kubernetes"` with `namespace = "infrastructure"`,
    `secret_suffix = "homelab-proxmox"`, and `in_cluster_config = true`.
 6. Set Workspace `managementPolicies` to omit `Delete`. Do not destroy the
    Workspace or state as a way of deleting a VM.
 
 The exact provider ServiceAccount name is assigned at package install and
-must be checked in the target cluster. The installed provider-opentofu v1.1.9
-system ClusterRole currently grants wildcard access to Secrets, ConfigMaps,
-and Leases cluster-wide. Crossplane 2.4.2 adds these rules unconditionally to
-every provider's system ClusterRole; its DeploymentRuntimeConfig does not
-scope them to a namespace. This is confirmed in the
-[Crossplane v2.4.2 RBAC implementation](https://github.com/crossplane/crossplane/blob/v2.4.2/internal/controller/rbac/provider/roles/roles.go).
-That ClusterRole is generated and reconciled by Crossplane, so patching it
-manually is not a supported or durable restriction. An external S3 backend
-would avoid using Kubernetes Secrets and Leases for OpenTofu state, but would
-not remove the provider's unconditional Kubernetes permissions. Do not create
-a Workspace with this provider until its permissions can be constrained by a
-supported mechanism.
-
-An alternative under evaluation is the maintained
-[Flux Tofu Controller](https://github.com/flux-iac/tofu-controller), which
-supports namespace-limited watching and a runner ServiceAccount. Its chart
-also grants broad permissions by default, so a replacement would require
-disabling chart-managed RBAC and supplying reviewed namespace-scoped Roles and
-RoleBindings. It also requires Flux source-controller for Git module sources.
-This alternative has not been deployed or validated in this cluster.
+must be checked in the target cluster. Crossplane 2.4.2 adds the broad system
+permissions unconditionally to each provider. This POC explicitly accepts
+that limitation to keep the existing Argo CD, Crossplane and OpenTofu
+architecture; an external state backend would not remove the provider's
+unconditional Kubernetes permissions. Before production, replace or constrain
+this permission model through a supported and verified mechanism.
 
 The Proxmox token Secret has been configured and authenticated successfully
 with a read-only API request. Its current ACL is broader than the POC requires:
@@ -88,12 +78,21 @@ No Workspace or VM has been applied.
 
 ## Module sourcing
 
-Provider-opentofu supports inline HCL or a remote module downloaded by `tofu
-init -from-module`. This repository is private. A Workspace must therefore
-receive read-only Git credentials for a pinned commit to fetch
-`terraform/environments/homelab`, or be supplied with an immutable module
-artifact. Argo CD's repository credential is not automatically available to
-the provider pod. Do not use a mutable branch ref for production state.
+Provider-opentofu downloads remote modules with `tofu init -from-module`.
+Argo CD's existing read-only GitHub deploy key is copied into the
+`crossplane-system/provider-opentofu-git-auth` Secret, together with the
+`argocd-ssh-known-hosts-cm` host keys. The
+`provider-opentofu-git` DeploymentRuntimeConfig uses an init container to
+install the Alpine OpenSSH client into an ephemeral volume and stage the key
+with SSH-safe ownership and mode. The provider mounts the staged data
+read-only and uses `GIT_SSH_COMMAND`; the private key is never placed in Git.
+Refresh the Secret if the repository deploy key or GitHub host keys are
+rotated.
+
+Workspaces must fetch `terraform/environments/homelab` at an immutable commit
+SHA, not a moving branch ref. When upgrading provider-opentofu, update the
+runtime configuration's Deployment selector to match the new generated
+provider revision before rolling it out.
 
 ## BPG template limitations
 
