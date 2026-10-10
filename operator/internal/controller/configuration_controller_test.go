@@ -7,6 +7,7 @@ import (
 	"time"
 
 	configurationv1alpha1 "github.com/sarunasr/vpc-poc/operator/api/v1alpha1"
+	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -205,6 +206,55 @@ func TestJobWithoutProxyJumpDoesNotMountJumpSecret(t *testing.T) {
 		if volume.Name == "jump-key-input" {
 			t.Fatal("direct SSH job unexpectedly mounts a jump-host Secret")
 		}
+	}
+}
+
+func TestBuildJobStoresFullRevisionForAppliedStatus(t *testing.T) {
+	revision := strings.Repeat("a", 64)
+	config := &configurationv1alpha1.Configuration{
+		ObjectMeta: metav1.ObjectMeta{Name: "web01", Namespace: "infrastructure"},
+		Spec: configurationv1alpha1.ConfigurationSpec{
+			Target: configurationv1alpha1.TargetSpec{Host: "10.10.10.21"},
+		},
+	}
+	job := buildJob(config, "web01-job", revision, "runner:latest")
+	if got := job.Labels[revisionLabel]; got != revision[:12] {
+		t.Fatalf("revision label = %q, want 12-character prefix", got)
+	}
+	if got := job.Annotations[revisionAnnotation]; got != revision {
+		t.Fatalf("full revision annotation = %q, want %q", got, revision)
+	}
+	appliedRevision, err := appliedJobRevision(job, revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if appliedRevision != revision {
+		t.Fatalf("applied revision = %q, want full revision %q", appliedRevision, revision)
+	}
+}
+
+func TestAppliedJobRevisionSupportsLegacyMatchingJob(t *testing.T) {
+	revision := strings.Repeat("b", 64)
+	job := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{
+		Name:   "legacy-job",
+		Labels: map[string]string{revisionLabel: revision[:12]},
+	}}
+	appliedRevision, err := appliedJobRevision(job, revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if appliedRevision != revision {
+		t.Fatalf("legacy applied revision = %q, want full revision %q", appliedRevision, revision)
+	}
+}
+
+func TestAppliedJobRevisionRejectsUnmatchedLegacyJob(t *testing.T) {
+	job := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{
+		Name:   "legacy-job",
+		Labels: map[string]string{revisionLabel: strings.Repeat("a", 12)},
+	}}
+	if _, err := appliedJobRevision(job, strings.Repeat("b", 64)); err == nil {
+		t.Fatal("expected unmatched legacy job revision to be rejected")
 	}
 }
 

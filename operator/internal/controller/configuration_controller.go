@@ -36,6 +36,7 @@ const (
 	configLabel             = "infra.example.io/configuration"
 	hostLabel               = "infra.example.io/target"
 	revisionLabel           = "infra.example.io/revision"
+	revisionAnnotation      = "infra.example.io/full-revision"
 )
 
 type ConfigurationReconciler struct {
@@ -122,8 +123,12 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		if err == nil {
 			switch {
 			case jobSucceeded(&job):
+				appliedRevision, err := appliedJobRevision(&job, revision)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
 				now := metav1.Now()
-				config.Status.AppliedRevision = job.Labels[revisionLabel]
+				config.Status.AppliedRevision = appliedRevision
 				config.Status.LastSuccessfulExecution = &now
 				config.Status.LastVerificationTime = &now
 				config.Status.LastCompletedExecution = &now
@@ -377,7 +382,12 @@ func buildJob(config *configurationv1alpha1.Configuration, name, revision, image
 		initCommand += " && mkdir -p /credentials/jump && install -m 0600 /ssh-source/jump/ssh-privatekey /credentials/jump/ssh-privatekey"
 	}
 	return &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: config.Namespace, Labels: labels},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Namespace:   config.Namespace,
+			Labels:      labels,
+			Annotations: map[string]string{revisionAnnotation: revision},
+		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit:            &backoffLimit,
 			ActiveDeadlineSeconds:   &deadline,
@@ -422,6 +432,24 @@ func buildJob(config *configurationv1alpha1.Configuration, name, revision, image
 			},
 		},
 	}
+}
+
+func appliedJobRevision(job *batchv1.Job, desiredRevision string) (string, error) {
+	if revision := job.Annotations[revisionAnnotation]; revision != "" {
+		if len(revision) != sha256.Size*2 {
+			return "", fmt.Errorf("Job %s has an invalid full configuration revision annotation", job.Name)
+		}
+		if _, err := hex.DecodeString(revision); err != nil {
+			return "", fmt.Errorf("Job %s has an invalid full configuration revision annotation: %w", job.Name, err)
+		}
+		return revision, nil
+	}
+
+	labelRevision := job.Labels[revisionLabel]
+	if labelRevision != "" && strings.HasPrefix(desiredRevision, labelRevision) {
+		return desiredRevision, nil
+	}
+	return "", fmt.Errorf("successful Job %s has no full configuration revision annotation and does not match the current desired revision", job.Name)
 }
 
 func jobInputs(config *configurationv1alpha1.Configuration, lifecycleDir string) (string, string, []string, error) {
