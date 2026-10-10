@@ -61,9 +61,24 @@ state Secret as a quick fix.
 The exact provider ServiceAccount name is assigned at package install and
 must be checked in the target cluster. The installed provider-opentofu v1.1.9
 system ClusterRole currently grants wildcard access to Secrets, ConfigMaps,
-and Leases cluster-wide. Do not create a Workspace using the Kubernetes
-backend until that access can be restricted to the `infrastructure`
-namespace; a namespaced Role alone does not narrow an existing ClusterRole.
+and Leases cluster-wide. Crossplane 2.4.2 adds these rules unconditionally to
+every provider's system ClusterRole; its DeploymentRuntimeConfig does not
+scope them to a namespace. This is confirmed in the
+[Crossplane v2.4.2 RBAC implementation](https://github.com/crossplane/crossplane/blob/v2.4.2/internal/controller/rbac/provider/roles/roles.go).
+That ClusterRole is generated and reconciled by Crossplane, so patching it
+manually is not a supported or durable restriction. An external S3 backend
+would avoid using Kubernetes Secrets and Leases for OpenTofu state, but would
+not remove the provider's unconditional Kubernetes permissions. Do not create
+a Workspace with this provider until its permissions can be constrained by a
+supported mechanism.
+
+An alternative under evaluation is the maintained
+[Flux Tofu Controller](https://github.com/flux-iac/tofu-controller), which
+supports namespace-limited watching and a runner ServiceAccount. Its chart
+also grants broad permissions by default, so a replacement would require
+disabling chart-managed RBAC and supplying reviewed namespace-scoped Roles and
+RoleBindings. It also requires Flux source-controller for Git module sources.
+This alternative has not been deployed or validated in this cluster.
 
 The Proxmox token Secret has been configured and authenticated successfully
 with a read-only API request. Its current ACL is broader than the POC requires:

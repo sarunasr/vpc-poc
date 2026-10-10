@@ -44,10 +44,17 @@ Status separates static/build checks from infrastructure acceptance tests.
   ACL before provisioning; no Proxmox resources were changed.
 - The installed provider-opentofu system ClusterRole grants wildcard access to
   Secrets, ConfigMaps, and Leases cluster-wide. The Kubernetes state backend
-  cannot be used safely until this provider access is restricted to
-  `infrastructure`.
+  cannot be used safely with this provider. Crossplane v2.4.2 adds these
+  permissions unconditionally; an external state backend does not remove
+  them, and patching the generated ClusterRole is not durable.
+- Evaluated the maintained Flux Tofu Controller as an alternative. It can watch
+  selected namespaces and use a runner ServiceAccount, but its default chart
+  also grants broad permissions. Achieving least privilege would require
+  replacing its default RBAC with namespace-scoped resources and adding Flux
+  source-controller for Git module sources. It has not been installed or
+  validated here.
 - The private Git repository still needs a read-only credential available to
-  the provider for a pinned module revision.
+  whichever source/controller is selected for a pinned module revision.
 - No OpenTofu Workspace or VM was applied. VMIDs `101`/`102`, template `9000`,
   and Proxmox networking/storage were not changed.
 - No Debian target VM/SSH Secret exists for end-to-end Ansible install,
