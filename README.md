@@ -29,10 +29,9 @@ Not yet end-to-end verified:
 - Proxmox provisioning and state recovery: the Proxmox API token authenticates,
   and its effective ACL now grants VM administration only on target VMID `201`,
   no privileges on protected VMIDs `101`/`102`, and only audit/clone on
-  template `9000`. The address `10.10.10.21` is confirmed reserved. The first
-  Workspace reconcile reached Proxmox but clone was denied for missing
-  `SDN.Use` on `/sdn/zones/localnetwork/vmbr0`; Workspace is temporarily
-  Observe-only. VMID `201` was not created.
+  template `9000`. `SDN.Use` is now granted only on
+  `/sdn/zones/localnetwork/vmbr0`, and `10.10.10.21` is confirmed reserved.
+  The Workspace is being resumed; VMID `201` has not yet been created.
 - The homelab POC accepts provider-opentofu's existing cluster-wide wildcard
   access to Kubernetes Secrets, ConfigMaps and Leases. This is a known security
   limitation and must be addressed before production.

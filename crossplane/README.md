@@ -77,9 +77,10 @@ and only `VM.Audit`/`VM.Clone` on template 9000. Local storage grants
 `Datastore.AllocateSpace`/`Datastore.Audit`. The Workspace object is managed
 by Argo, but no VM has been created. Its first reconcile reached Proxmox and
 clone was denied because `SDN.Use` is missing at
-`/sdn/zones/localnetwork/vmbr0`. The address `10.10.10.21` is confirmed
-reserved. The Workspace is temporarily Observe-only until that permission is
-granted.
+`/sdn/zones/localnetwork/vmbr0`. The user granted that privilege only at the
+exact VNet path; the parent zone has no effective privileges. The address
+`10.10.10.21` is confirmed reserved. The Workspace is being resumed; no VM
+has been created yet.
 
 ## Module sourcing
 

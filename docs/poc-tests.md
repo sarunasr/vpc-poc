@@ -54,14 +54,16 @@ Status separates static/build checks from infrastructure acceptance tests.
 - A dedicated Ed25519 VM/Ansible keypair is stored in the
   `infrastructure/homelab-vm-ssh` Secret; private key material was not
   displayed or committed.
-- The Argo-managed Workspace failed its first VM clone with Proxmox HTTP 403:
-  missing `SDN.Use` on `/sdn/zones/localnetwork/vmbr0`. The Workspace is
-  temporarily Observe-only. VMID `201` was not created; VMIDs `101`/`102`,
-  template `9000`, and Proxmox networking/storage were not changed.
+- The first Argo-managed Workspace clone attempt failed with Proxmox HTTP 403
+  because `SDN.Use` was missing on `/sdn/zones/localnetwork/vmbr0`. The user
+  granted that privilege on the exact VNet path; the effective token check
+  confirms no privileges on its parent zone. VMID `201` was not created by
+  the failed attempt; VMIDs `101`/`102`, template `9000`, and
+  Proxmox networking/storage were not changed.
 - Effective Proxmox permissions are restricted from VMIDs `101`/`102`; VMID
   `201` has the required POC administration privileges and template `9000`
-  has only audit/clone. Add the missing `SDN.Use` on the exact VNet path before
-  resuming provisioning.
+  has only audit/clone. The Workspace's Create/Update policies are being
+  restored to resume provisioning.
 - No Debian target VM exists for end-to-end Ansible install, upgrade,
   uninstall, cron, or drift tests.
 - BPG provider does not document a dedicated KVM-enable/disable VM argument.

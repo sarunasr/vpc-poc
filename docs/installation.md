@@ -104,8 +104,8 @@ backend, and omits `Delete` from its management policies. The target address
 has been confirmed reserved, and the Proxmox token cannot manage VMIDs
 `101`/`102` or modify template `9000`. It reads credentials from Kubernetes
 Secrets; do not add fake credential values. Proxmox also requires the token to
-have `SDN.Use` on `/sdn/zones/localnetwork/vmbr0`; until that is granted, the
-Workspace remains Observe-only and cannot provision.
+have `SDN.Use` on `/sdn/zones/localnetwork/vmbr0`; this exact-path permission
+has been verified, with no effective permissions on the parent zone.
 
 The dedicated `infrastructure/homelab-vm-ssh` Secret already contains the
 separate VM keypair; do not reuse the GitHub deploy key. After the Workspace
