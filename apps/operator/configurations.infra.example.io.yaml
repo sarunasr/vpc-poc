@@ -220,6 +220,13 @@ rules:
       - delete
       - get
   - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+  - apiGroups:
       - opentofu.m.upbound.io
     resources:
       - workspaces
