@@ -137,6 +137,7 @@ func TestJobInputsAreJSONCompatibleYAMLAndIncludeSSHSettings(t *testing.T) {
 		t.Fatalf("unexpected playbook: %s", playbook)
 	}
 	if !strings.Contains(inventory, `"ansible_host":"target.example.test"`) ||
+		!strings.Contains(inventory, "UserKnownHostsFile=/tmp/known_hosts") ||
 		!strings.Contains(inventory, "/credentials/ssh-privatekey") {
 		t.Fatalf("inventory is missing target or SSH settings: %s", inventory)
 	}
@@ -168,6 +169,7 @@ func TestJobInputsAndJobUseSeparateProxyJumpKey(t *testing.T) {
 	inventoryText := string(inventory)
 	if !strings.Contains(inventoryText, "ProxyCommand=ssh -F /dev/null") ||
 		!strings.Contains(inventoryText, "-i /credentials/jump/ssh-privatekey") ||
+		!strings.Contains(inventoryText, "-o UserKnownHostsFile=/tmp/known_hosts") ||
 		!strings.Contains(inventoryText, "root@185.170.196.225") ||
 		!strings.Contains(inventoryText, `"ansible_ssh_private_key_file":"/credentials/ssh-privatekey"`) {
 		t.Fatalf("inventory is missing separate target and jump SSH settings: %s", inventory)

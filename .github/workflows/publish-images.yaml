@@ -3,7 +3,7 @@ name: Publish POC images
 on:
   push:
     tags:
-      - v1.0.3
+      - v1.0.4
 
 permissions:
   contents: read
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   publish:
-    if: github.ref == 'refs/tags/v1.0.3'
+    if: github.ref == 'refs/tags/v1.0.4'
     runs-on: ubuntu-24.04
     steps:
       - name: Check out source
@@ -44,7 +44,7 @@ jobs:
           file: operator/Dockerfile
           platforms: linux/amd64
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/vpc-poc-operator:1.0.3
+          tags: ghcr.io/${{ github.repository_owner }}/vpc-poc-operator:1.0.4
 
       - name: Publish Ansible execution image
         uses: docker/build-push-action@v6
@@ -53,4 +53,4 @@ jobs:
           file: ansible/ee/Dockerfile
           platforms: linux/amd64
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/vpc-poc-ansible-ee:1.0.3
+          tags: ghcr.io/${{ github.repository_owner }}/vpc-poc-ansible-ee:1.0.4

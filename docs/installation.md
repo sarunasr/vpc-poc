@@ -37,11 +37,11 @@ make ansible-image
 make operator-image
 ```
 
-The sample manifests use those image names. Push the `v1.0.3` Git tag to run
+The sample manifests use those image names. Push the `v1.0.4` Git tag to run
 [the publish workflow](../.github/workflows/publish-images.yaml), which builds
-and publishes both `linux/amd64` images as `1.0.3` using the repository's
+and publishes both `linux/amd64` images as `1.0.4` using the repository's
 `GITHUB_TOKEN`. Actions must be enabled and permit `packages: write`. GHCR
-`1.0.3` packages are public and do not require Kubernetes image-pull
+`1.0.4` packages are public and do not require Kubernetes image-pull
 credentials. GHCR responds to unauthenticated manifest requests with a bearer
 challenge; clients request an anonymous pull token and then fetch the image.
 The Git repository remains private, but public images expose the published
@@ -127,7 +127,8 @@ Argo CD applies the CRD, scoped Role/RoleBinding, and operator Deployment from
 controller leader election. The image must already be available to the cluster. Generated
 Jobs run as UID 1000, drop Linux capabilities, use a read-only root filesystem,
 stage the target and optional jump SSH keys with mode `0600` into an ephemeral
-volume, and have a bounded deadline.
+volume, store accepted SSH host keys in ephemeral `/tmp/known_hosts`, and have
+a bounded deadline.
 
 Read [Configuration](configuration.md), [scheduling](reconciliation.md),
 [Ansible versioning](ansible-lifecycle.md), and [troubleshooting](troubleshooting.md)

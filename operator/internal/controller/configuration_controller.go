@@ -479,7 +479,7 @@ func jobInputs(config *configurationv1alpha1.Configuration, lifecycleDir string)
 	if port <= 0 {
 		port = 22
 	}
-	commonArgs := "-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10"
+	commonArgs := "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/tmp/known_hosts -o ConnectTimeout=10"
 	if jump := config.Spec.Target.ProxyJump; jump != nil {
 		if err := validateProxyJump(jump); err != nil {
 			return "", "", nil, err
@@ -488,7 +488,7 @@ func jobInputs(config *configurationv1alpha1.Configuration, lifecycleDir string)
 		if jumpPort <= 0 {
 			jumpPort = 22
 		}
-		proxyCommand := fmt.Sprintf("ssh -F /dev/null -i /credentials/jump/ssh-privatekey -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -p %d -W %%h:%%p %s@%s", jumpPort, jump.User, jump.Host)
+		proxyCommand := fmt.Sprintf("ssh -F /dev/null -i /credentials/jump/ssh-privatekey -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/tmp/known_hosts -o ConnectTimeout=10 -p %d -W %%h:%%p %s@%s", jumpPort, jump.User, jump.Host)
 		commonArgs += " -o 'ProxyCommand=" + proxyCommand + "'"
 	}
 	inventory, err := json.Marshal(map[string]interface{}{
