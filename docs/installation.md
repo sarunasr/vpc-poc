@@ -37,11 +37,11 @@ make ansible-image
 make operator-image
 ```
 
-The sample manifests use those image names. Push the `v1.0.5` Git tag to run
+The sample manifests use those image names. Push the `v1.0.6` Git tag to run
 [the publish workflow](../.github/workflows/publish-images.yaml), which builds
-and publishes both `linux/amd64` images as `1.0.5` using the repository's
+and publishes both `linux/amd64` images as `1.0.6` using the repository's
 `GITHUB_TOKEN`. Actions must be enabled and permit `packages: write`. GHCR
-`1.0.5` packages are public and do not require Kubernetes image-pull
+`1.0.6` packages are public and do not require Kubernetes image-pull
 credentials. GHCR responds to unauthenticated manifest requests with a bearer
 challenge; clients request an anonymous pull token and then fetch the image.
 The Git repository remains private, but public images expose the published

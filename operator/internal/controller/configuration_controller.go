@@ -192,7 +192,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	config.Status.Attempt++
 	config.Status.AttemptedRevision = attemptKey
-	jobName := executionName(config.Name, revision, trigger, config.Status.Attempt)
+	jobName := executionName(config.Name, revision, trigger, config.Generation, config.Status.Attempt)
 	job := buildJob(&config, jobName, revision, r.Image)
 	if err := controllerutil.SetControllerReference(&config, job, r.Scheme); err != nil {
 		return ctrl.Result{}, err
@@ -612,8 +612,8 @@ func appliedCollectionMatches(applied, desired []configurationv1alpha1.Collectio
 	return appliedVersion != "" && appliedVersion == desiredVersion
 }
 
-func executionName(configName, revision, trigger string, attempt int32) string {
-	triggerHash := sha256.Sum256([]byte(trigger))
+func executionName(configName, revision, trigger string, generation int64, attempt int32) string {
+	triggerHash := sha256.Sum256([]byte(fmt.Sprintf("%s|generation=%d", trigger, generation)))
 	if len(configName) > 20 {
 		configName = strings.Trim(configName[:20], "-")
 	}

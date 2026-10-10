@@ -75,6 +75,15 @@ func TestDesiredRevisionChangesWithProxyJump(t *testing.T) {
 	}
 }
 
+func TestExecutionNameChangesAcrossConfigurationGenerations(t *testing.T) {
+	revision := strings.Repeat("a", 64)
+	first := executionName("web01", revision, "change-"+revision, 7, 1)
+	second := executionName("web01", revision, "change-"+revision, 8, 1)
+	if first == second {
+		t.Fatalf("same revision in different Configuration generations reused Job name %q", first)
+	}
+}
+
 func TestScheduleIntervalRunsAtMostOneMissedOccurrence(t *testing.T) {
 	config := configurationv1alpha1.Configuration{
 		ObjectMeta: metav1.ObjectMeta{CreationTimestamp: metav1.NewTime(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))},
