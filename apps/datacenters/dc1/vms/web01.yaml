@@ -6,19 +6,67 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 spec:
+  # Required: name of the Datacenter resource in this namespace.
   datacenterRef: dc1
   vm:
+    # Optional Proxmox VM name; defaults to this VirtualMachine's metadata.name.
     name: gitops-poc-201
+    # Required unique Proxmox VM ID; must be greater than zero.
     vm_id: 201
+    # Optional Proxmox node and template VM ID; inherit from Datacenter defaults.
+    # node_name: srv2050453
+    # template_id: 9000
+    # Optional per-VM hardware overrides; positive integers. Defaults are in
+    # Datacenter spec.vmDefaults.
+    # cores: 1
+    memory_mb: 1152
+    # disk_size_gb: 8
+    # Optional network and cloud-init overrides; inherit Datacenter defaults.
+    # bridge: vmbr0
     ipv4_cidr: 10.10.10.21/24
+    # gateway: 10.10.10.1
+    # dns_servers:
+    #   - 1.1.1.1
+    # cloud_init_user: debian
+  # Optional Ansible SSH target overrides; defaults are in Datacenter
+  # spec.ansible.defaults. Host defaults to the IPv4 address in vm.ipv4_cidr.
+  # target:
+  #   host: 10.10.10.21
+  #   user: debian
+  #   sshSecretRef: homelab-vm-ssh
+  #   port: 22 # Optional, 1-65535; default is 22.
+  #   proxyJump: # Omit to connect directly.
+  #     host: 185.170.196.225
+  #     user: root
+  #     sshSecretRef: proxmox-ansible-jump
+  #     port: 22 # Optional, 1-65535; default is 22.
   ansible:
+    # Collection name is namespace.collection; version must be a valid
+    # semantic version available in the configured Ansible Runner image.
     collections:
       - name: homelab.web
         version: 1.0.0
       - name: homelab.system
         version: 1.0.0
+    # Role name is namespace.collection.role. Optional vars are passed to the
+    # role as a mapping, for example: vars: {listen_port: 8080}.
     roles:
       - name: homelab.web.nginx
       - name: homelab.system.textfile
+    # true or false; when true, supported cleanup runs for removed roles.
     lifecycle:
       uninstallRemovedRoles: true
+  # Optional per-VM reconciliation overrides; defaults are in the Datacenter.
+  # reconciliation:
+  #   onChange: true # true or false; run when desired configuration changes.
+  #   schedule: # Omit for no periodic runs.
+  #     type: interval # Allowed: interval, cron.
+  #     duration: 24h # Interval mode: positive Go duration, e.g. 30m or 24h.
+  #     # Cron mode: five-field cron expression and optional IANA timezone.
+  #     # expression: "0 8 * * *"
+  #     # timezone: Europe/Vilnius
+  # Optional execution overrides; defaults are in the Datacenter.
+  # execution:
+  #   maxConcurrent: 2 # Allowed: 1-100 concurrent Ansible Jobs.
+  #   timeout: 30m # Positive Go duration.
+  #   maxRetries: 3 # Allowed: 0-10; 0 selects the default of 3.
