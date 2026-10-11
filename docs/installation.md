@@ -19,13 +19,10 @@ KUBECONFIG="$HOME/.kube/config-vpc-poc"
 kubectl --kubeconfig "$KUBECONFIG" get nodes
 ```
 
-The committed root Argo CD Application watches `apps/`. Pushing changes causes
-Argo CD to create the Crossplane Application, install the Crossplane Helm
-release at 2.4.2, install provider-opentofu 1.1.9, create the `infrastructure`
-namespace, and install the Configuration CRD/operator resources. Crossplane
-is installed before a separate Provider child Application syncs
-`provider-opentofu`, so Argo discovers the Provider CRD only after Crossplane
-has installed it.
+The root Argo CD Application watches `apps/`. It installs the infrastructure
+namespace, Crossplane/provider child Applications, operator CRDs, RBAC, and
+controller Deployment. Sync waves apply the CRDs before the controller and
+VirtualMachine declarations.
 
 ## Build images
 
@@ -37,11 +34,11 @@ make ansible-image
 make operator-image
 ```
 
-The sample manifests use those image names. Push the `v1.0.6` Git tag to run
+The sample manifests use those image names. Push the `v1.0.7` Git tag to run
 [the publish workflow](../.github/workflows/publish-images.yaml), which builds
-and publishes both `linux/amd64` images as `1.0.6` using the repository's
+and publishes both `linux/amd64` images as `1.0.7` using the repository's
 `GITHUB_TOKEN`. Actions must be enabled and permit `packages: write`. GHCR
-`1.0.6` packages are public and do not require Kubernetes image-pull
+`1.0.7` packages are public and do not require Kubernetes image-pull
 credentials. GHCR responds to unauthenticated manifest requests with a bearer
 challenge; clients request an anonymous pull token and then fetch the image.
 The Git repository remains private, but public images expose the published
@@ -92,43 +89,72 @@ the resulting data read-only. The key is not committed to this repository.
 Refresh the Secret if the deploy key or known-host data changes. Workspace
 module sources must pin an immutable Git commit SHA.
 
-## Deploy a VM
+## Migrate the existing Workspace
 
-The homelab Terraform root uses VMID 201 and address `10.10.10.21/24` as
-example values. Verify they are unused before applying. It clones, never
-recreates, template `9000`; Proxmox remains responsible for Cloud-Init.
-`prevent_destroy` is a second guard against Terraform destroying the guest.
-The Argo-managed [`homelab Workspace`](../apps/infrastructure/homelab-workspace.yaml)
-pins the module to an immutable Git revision, uses the Kubernetes state
-backend, and omits `Delete` from its management policies. The target address
-has been confirmed reserved, and the Proxmox token cannot manage VMIDs
-`101`/`102` or modify template `9000`. It reads credentials from Kubernetes
-Secrets; do not add fake credential values. Proxmox also requires the token to
-have `SDN.Use` on `/sdn/zones/localnetwork/vmbr0`; this exact-path permission
-has been verified, with no effective permissions on the parent zone.
+The existing `infrastructure/homelab` Workspace contains the live VM 201 state
+and is currently tracked by the root Argo Application. Do not delete it or
+create a second Workspace. Before syncing the new Datacenter declaration,
+hand ownership to the operator:
 
-The dedicated `infrastructure/homelab-vm-ssh` Secret already contains the
-separate VM keypair; do not reuse the GitHub deploy key. The sample uses
-Proxmox as an SSH jump host, with a separate `infrastructure/proxmox-ansible-jump`
-Secret. Restrict its root `authorized_keys` entry with
-`restrict,port-forwarding,permitopen="10.10.10.21:22",command="/bin/false"`.
-This allows the ProxyCommand tunnel only to the VM's SSH port and rejects
-interactive or command sessions. Allow inbound SSH from the MicroK8s node's
-egress IP (`147.93.72.210`) only. Do not use the personal workstation private
-key. The SSH key's public line and setup steps are provided after the Secret
-is created. Once the host key and firewall are configured, review and apply the
-[`operator/deploy/configuration-sample.yaml`](../operator/deploy/configuration-sample.yaml)
-Configuration files are opt-in; the sample is not automatically applied.
+1. Mark the Workspace non-prunable:
+
+   ```sh
+   kubectl --kubeconfig "$HOME/.kube/config-vpc-poc" -n infrastructure \
+     annotate workspace.opentofu.m.upbound.io homelab \
+     argocd.argoproj.io/sync-options=Prune=false --overwrite
+   ```
+
+2. Apply the updated root Application, which excludes the old static manifest,
+   verify the `exclude` field is present on `Application/root`, then remove
+   the old resource tracking ID:
+
+   ```sh
+   kubectl --kubeconfig "$HOME/.kube/config-vpc-poc" apply \
+     -f bootstrap/argocd/root-application.yaml
+   kubectl --kubeconfig "$HOME/.kube/config-vpc-poc" -n infrastructure \
+     annotate workspace.opentofu.m.upbound.io homelab \
+     argocd.argoproj.io/tracking-id-
+   ```
+
+3. Sync the root Application. The `dc1` Datacenter controller adopts the same
+   Workspace and adds the complete VM map. Terraform's `moved` block maps
+   `module.vm` to `module.vms["web01"]`; inspect the plan/state and confirm
+   VM 201 remains unchanged before allowing OpenTofu to apply.
+
+The Workspace keeps its existing name and Kubernetes backend state. Its old
+manifest remains in Git for reference but is excluded from Argo's recursive
+source.
+
+## Declare and add VMs
+
+The Datacenter declaration at
+[`../apps/datacenters/dc1/datacenter.yaml`](../apps/datacenters/dc1/datacenter.yaml)
+holds the module revision, Secret references, infrastructure defaults, and
+Ansible defaults. Each
+[`VirtualMachine`](../apps/datacenters/dc1/vms/web01.yaml) file contains both
+Terraform-compatible VM inputs and pinned Ansible collections/roles. To add a
+VM, create one YAML file under `apps/datacenters/dc1/vms/`, then commit and
+push. Argo syncs it and the operator aggregates all VMs into the existing
+Workspace; no Terraform edits, Workspace SHA updates, or standalone
+Configuration manifests are needed.
+
+VM 201 uses a dedicated VM SSH Secret and a separate restricted Proxmox
+jump-host Secret. Never reuse the GitHub deploy key. Before provisioning VM
+202, grant the Proxmox API token the required VMID 202 permissions and update
+the jump key's `permitopen` entry to allow `10.10.10.22:22`. Confirm the
+address is reserved and SSH/firewall settings are ready. Removing a VM YAML
+automatically destroys that VM through Terraform; this behavior is intentional
+for the POC.
 
 ## Operator lifecycle
 
-Argo CD applies the CRD, scoped Role/RoleBinding, and operator Deployment from
-`apps/operator`; the namespaced Role grants only the Lease verbs required for
-controller leader election. The image must already be available to the cluster. Generated
-Jobs run as UID 1000, drop Linux capabilities, use a read-only root filesystem,
-stage the target and optional jump SSH keys with mode `0600` into an ephemeral
-volume, store accepted SSH host keys in ephemeral `/tmp/known_hosts`, and have
-a bounded deadline.
+Argo CD applies the Configuration, Datacenter, and VirtualMachine CRDs before
+the controller resources in `apps/operator`. The namespaced Role manages the
+operator CRDs, generated Jobs and ConfigMaps, leader-election Lease, and
+Crossplane Workspace in `infrastructure`. Generated Jobs run as UID 1000,
+drop Linux capabilities, use a read-only root filesystem, stage the target and
+optional jump SSH keys with mode `0600` into an ephemeral volume, store
+accepted host keys in ephemeral `/tmp/known_hosts`, and have a bounded deadline.
 
 Read [Configuration](configuration.md), [scheduling](reconciliation.md),
 [Ansible versioning](ansible-lifecycle.md), and [troubleshooting](troubleshooting.md)

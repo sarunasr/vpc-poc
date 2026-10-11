@@ -1,17 +1,23 @@
-module "vm" {
-  source = "../../modules/proxmox-vm"
+module "vms" {
+  for_each = var.vms
+  source   = "../../modules/proxmox-vm"
 
-  name            = var.name
-  vm_id           = var.vm_id
-  node_name       = var.node_name
-  template_id     = var.template_id
-  cores           = var.cores
-  memory_mb       = var.memory_mb
-  disk_size_gb    = var.disk_size_gb
-  bridge          = var.bridge
-  ipv4_cidr       = var.ipv4_cidr
-  gateway         = var.gateway
-  dns_servers     = var.dns_servers
-  cloud_init_user = var.cloud_init_user
+  name            = each.value.name
+  vm_id           = each.value.vm_id
+  node_name       = each.value.node_name
+  template_id     = each.value.template_id
+  cores           = each.value.cores
+  memory_mb       = each.value.memory_mb
+  disk_size_gb    = each.value.disk_size_gb
+  bridge          = each.value.bridge
+  ipv4_cidr       = each.value.ipv4_cidr
+  gateway         = each.value.gateway
+  dns_servers     = each.value.dns_servers
+  cloud_init_user = each.value.cloud_init_user
   ssh_public_keys = var.ssh_public_keys
+}
+
+moved {
+  from = module.vm
+  to   = module.vms["web01"]
 }

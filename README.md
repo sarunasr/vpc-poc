@@ -1,74 +1,188 @@
 # Infrastructure GitOps POC
 
-A Kubernetes-native GitOps proof of concept for infrastructure and operating
-system configuration. Argo CD syncs this repository; Crossplane with
-`provider-opentofu` owns Terraform/OpenTofu infrastructure reconciliation; a
-small Go operator coordinates Ansible Runner Jobs for target configuration.
+This repository manages Proxmox VMs and their Ansible configuration through
+Argo CD, Crossplane `provider-opentofu`, OpenTofu, and the existing Go operator
+and Ansible Runner Jobs. One `Datacenter` owns one Crossplane Workspace and
+Terraform state; its `VirtualMachine` resources are aggregated into a complete
+Terraform `vms` map.
 
-This repository does **not** install or replace the existing MicroK8s, Argo CD,
-Proxmox, Debian VM template, or network. For deployment assumptions and the
-current validation status, see [`docs/installation.md`](docs/installation.md)
-and [`docs/poc-tests.md`](docs/poc-tests.md).
+## Add a VM
 
-## Current POC status
+Create the datacenter once in
+`apps/datacenters/dc1/datacenter.yaml`, pinning a module release and keeping
+credentials in Kubernetes Secrets:
 
-Implemented in Git:
+```yaml
+apiVersion: infra.example.io/v1alpha1
+kind: Datacenter
+metadata:
+  name: dc1
+  namespace: infrastructure
+spec:
+  terraform:
+    workspaceName: homelab
+    module:
+      source: git::ssh://git@github.com/sarunasr/vpc-poc.git
+      version: v1.0.0
+      entrypoint: terraform/environments/homelab
+    providerConfigRef:
+      kind: ProviderConfig
+      name: default
+    proxmoxAPIToken:
+      name: proxmox-credentials
+      key: api-token
+    sshPublicKeys:
+      name: homelab-vm-ssh
+      key: ssh-public-keys
+  proxmox:
+    defaultNode: srv2050453
+    defaultTemplate: 9000
+  vmDefaults:
+    cores: 1
+    memory_mb: 1024
+    disk_size_gb: 8
+    bridge: vmbr0
+    gateway: 10.10.10.1
+    dns_servers: [1.1.1.1]
+    cloud_init_user: debian
+  ansible:
+    defaults:
+      user: debian
+      sshSecretRef: homelab-vm-ssh
+      proxyJump:
+        host: 185.170.196.225
+        user: root
+        sshSecretRef: proxmox-ansible-jump
+    reconciliation:
+      onChange: true
+      schedule:
+        type: interval
+        duration: 24h
+    execution:
+      maxConcurrent: 2
+      timeout: 30m
+      maxRetries: 3
+```
 
-- Terraform VM module for the existing Debian 13 Cloud-Init template,
-  `local` storage, and `vmbr0`, with KVM acceleration not requested and
-  `prevent_destroy` protection.
-- Independently versioned `homelab.web` and `homelab.system` Ansible
-  collections and an Ansible Runner execution image build.
-- Argo CD declarations for Crossplane 2.4.2 and provider-opentofu 1.1.9.
-- A Go Configuration controller, CRD, scoped Kubernetes permissions, and
-  Ansible Job creation with deterministic revisions, interval/cron/manual
-  triggers, retry limits, and per-host/overall concurrency controls.
+Then create one file under `apps/datacenters/dc1/vms/` for each VM. For
+example, `web02.yaml`:
 
-End-to-end verified so far:
+```yaml
+apiVersion: infra.example.io/v1alpha1
+kind: VirtualMachine
+metadata:
+  name: web02
+  namespace: infrastructure
+spec:
+  datacenterRef: dc1
+  vm:
+    name: gitops-poc-202
+    vm_id: 202
+    ipv4_cidr: 10.10.10.22/24
+  ansible:
+    collections:
+      - name: homelab.web
+        version: 1.0.0
+    roles:
+      - name: homelab.web.nginx
+    lifecycle:
+      uninstallRemovedRoles: true
+```
 
-- The Argo-managed Workspace is Ready, its state is stored in the Kubernetes
-  backend, and VMID `201` is running with `kvm: 0`. The Proxmox token has no
-  access to VMIDs `101`/`102`, only audit/clone on template `9000`, and
-  `SDN.Use` only on the VNet.
-- Kubernetes Ansible Jobs connect through the dedicated Proxmox SSH jump host.
-  The first run configured the VM successfully; a 30-second scheduled run
-  completed; an unsupported collection version was rejected without starting
-  a Job; and removing the Nginx role ran its supported uninstall tasks.
-- The `web01` Configuration uses pinned `1.0.0` collections, a 24-hour
-  schedule, and `onChange`. Full 64-character applied-revision tracking is
-  verified. Reverting to a previously applied revision created a fresh
-  v1.0.6 Runner Job and successfully reinstalled Nginx; no stale Job was
-  reused.
-- The homelab POC accepts provider-opentofu's existing cluster-wide wildcard
-  access to Kubernetes Secrets, ConfigMaps and Leases. This is a known security
-  limitation and must be addressed before production.
-- Private module access is prepared using Argo CD's read-only SSH deploy key,
-  staged with SSH-safe permissions and mounted read-only into
-  provider-opentofu. Argo rolled out the runtime configuration, and a
-  read-only `git ls-remote` to the private repository succeeded from the
-  provider pod.
-- The operator and Crossplane/provider are installed and running. Published
-  GHCR images are public; the Git repository remains private. Terraform VM
-  deletion remains disabled by management policy and `prevent_destroy`.
+Then **commit and push**. Argo CD syncs the declaration; the operator updates
+the datacenter Workspace with every declared VM, waits for the current
+Workspace generation and matching VM outputs, and derives the Ansible
+`Configuration` and Job. No Terraform edit, Workspace Git SHA update, or
+separate `Configuration` file is needed.
 
-The verified cases and remaining validation are tracked in
-[`docs/poc-tests.md`](docs/poc-tests.md). Do not treat YAML presence as proof
-that a feature is operational.
+The shared defaults and pinned Terraform module are in
+[`apps/datacenters/dc1/datacenter.yaml`](apps/datacenters/dc1/datacenter.yaml).
+VM 201's existing declaration is in
+[`web01.yaml`](apps/datacenters/dc1/vms/web01.yaml); the second-VM example
+is in [`web02.yaml`](apps/datacenters/dc1/vms/web02.yaml).
+The Kubernetes resources are under `apps/` because the existing root
+Application watches that directory recursively.
 
-## Repository map
+## How reconciliation works
 
-- [`apps/`](apps): Argo CD-managed Kubernetes declarations.
-- [`terraform/`](terraform): reusable Proxmox VM module and homelab root module.
-- [`crossplane/`](crossplane): Crossplane/provider setup and infrastructure
-  Workspace configuration guidance.
-- [`operator/`](operator): Go Configuration API/controller and deploy manifests.
-- [`ansible/`](ansible): versioned collections, tests, and Runner image.
-- [`docs/`](docs): architecture, safety, installation and testing.
+- `Datacenter` specifies the Workspace name, immutable Terraform module
+  revision, ProviderConfig, Secret key references, Proxmox defaults, and
+  shared Ansible settings. Secret values stay in Kubernetes Secrets.
+- `VirtualMachine.spec.vm` uses the existing Terraform module's input names:
+  `vm_id`, `node_name`, `template_id`, `cores`, `memory_mb`, `disk_size_gb`,
+  `bridge`, `ipv4_cidr`, `gateway`, `dns_servers`, and `cloud_init_user`.
+  Missing values inherit from `Datacenter.spec.vmDefaults` or `spec.proxmox`;
+  explicit VM values win. The resource name is the stable Terraform map key.
+- All non-terminating VMs whose `datacenterRef` matches are placed in one
+  deterministic `varmap.vms` map. Removing a VM removes only that map entry;
+  OpenTofu then destroys only that VM. An empty map is passed when the last VM
+  is removed, leaving the Workspace and its state intact.
+- Ansible target user, SSH Secret, ports, and ProxyJump inherit from the
+  Datacenter defaults and can be overridden in `spec.target`. Schedule,
+  execution limits, and `onChange` similarly inherit and may be overridden.
+  Collections and roles are declared on each VM; the operator owns a
+  same-named `Configuration` and runs the existing Ansible Runner workflow.
+- CPU, memory, disk, or network edits change Workspace inputs without changing
+  the Ansible content revision. Changes to collections, roles, variables,
+  target, role lifecycle, or VM recreation identity (module, VM name/ID, node,
+  or template) do change the Ansible revision. Schedule-only and execution-limit
+  changes update behavior without needlessly changing that content revision.
+- Terraform modules and Ansible collections remain pinned. Changing VM values
+  does not require changing the module revision. Update
+  `spec.terraform.module.version` only to upgrade the Terraform module.
 
-## Build and validate
+For a VM change, edit its YAML. To adjust CPU/RAM, set `vm.cores` or
+`vm.memory_mb`. Add/remove entries under `ansible.roles` to reconcile roles;
+`uninstallRemovedRoles: true` runs supported uninstall tasks and reports a
+warning for roles without uninstall support. Change a collection's pinned
+version to request that version; it must already be present in the operator's
+Ansible execution image. `reconciliation.schedule` accepts `interval` with a
+Go duration such as `24h`, or `cron` with an expression and optional IANA
+timezone. Delete the VM YAML to destroy that VM (POC behavior).
 
-Required local tools: Go 1.25+, Terraform/OpenTofu, Ansible Core/Galaxy, Docker.
-The following commands do not access Proxmox or change the Kubernetes cluster:
+## Architecture and operations
+
+```text
+Git -> Argo CD -> Datacenter + VirtualMachine CRDs
+                         |
+                    Go operator
+                    /          \
+ Crossplane Workspace           Configuration CRD
+         |                              |
+ provider-opentofu               Ansible Job/Runner
+         |                              |
+ OpenTofu -> Proxmox                    VM
+```
+
+The root Argo Application installs the CRDs before the controller and VM
+declarations. The operator Deployment and RBAC are under `apps/operator`;
+operator-generated Configurations are not Argo-managed. The old statically
+managed Workspace is excluded from the root Application and adopted by its
+Datacenter. See [`docs/installation.md`](docs/installation.md) for the
+one-time migration and credential requirements.
+
+Useful status and diagnostics:
+
+```sh
+kubectl -n infrastructure get datacenters,virtualmachines,configurations
+kubectl -n infrastructure describe virtualmachine web02
+kubectl -n infrastructure get workspaces.opentofu.m.upbound.io homelab -o yaml
+kubectl -n infrastructure get jobs
+kubectl -n infrastructure logs job/<configuration-job>
+```
+Use only the designated kubeconfig, `$HOME/.kube/config-vpc-poc`, for this
+homelab.
+
+See [`docs/architecture.md`](docs/architecture.md),
+[`docs/ansible-lifecycle.md`](docs/ansible-lifecycle.md),
+[`docs/reconciliation.md`](docs/reconciliation.md),
+[`docs/troubleshooting.md`](docs/troubleshooting.md), and
+[`docs/poc-tests.md`](docs/poc-tests.md).
+
+## Build and test
+
+Required local tools: Go 1.25+, Terraform/OpenTofu, Ansible Core/Galaxy, and
+Docker.
 
 ```sh
 make test
@@ -77,28 +191,15 @@ make ansible-image
 make operator-image
 ```
 
-To install the POC after publishing the two images and supplying a dedicated
-Proxmox API token, see [`docs/installation.md`](docs/installation.md).
+## POC limitations
 
-## Safety
+- VM declaration deletion causes automatic OpenTofu destruction. Do not use
+  this behavior for production workloads.
+- provider-opentofu's existing cluster-wide wildcard access to Kubernetes
+  Secrets, ConfigMaps, and Leases is explicitly accepted for this personal
+  homelab POC. It is a known security limitation to address before production.
+- The private Git repository and Kubernetes Secret/state handling remain
+  operational dependencies. Never put credentials or private SSH keys in Git.
 
-- Use only the dedicated Proxmox API token; do not use root credentials.
-- No passwords, API tokens, or SSH private keys belong in Git.
-- Workspace deletion policy is retain/orphan by default; Terraform VM resources
-  also have `prevent_destroy`.
-- VMs are not provisioned until credentials and a reviewed Workspace manifest
-  are present.
-- Keep the existing template VMID `9000`, networking and VMIDs `101`/`102`
-  untouched.
-- The OpenTofu Kubernetes backend uses Secrets for state and Leases for locks;
-  back up the `infrastructure` namespace accordingly.
-- provider-opentofu's cluster-wide Kubernetes Secret, ConfigMap and Lease
-  access is accepted for this personal homelab POC only; do not carry this
-  permission model into production without a security review and remediation.
-
-## Provider choice
-
-OpenTofu is the main POC path because a Terraform root can manage multiple
-provider types in one persistent state. A native Proxmox Crossplane provider
-is evaluated separately in [`docs/provider-comparison.md`](docs/provider-comparison.md);
-it is not installed and must not own a VM also managed by OpenTofu.
+The end-to-end test record, including what has and has not been run, is in
+[`docs/poc-tests.md`](docs/poc-tests.md).

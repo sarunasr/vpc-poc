@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -67,7 +68,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 	config.Status.DesiredRevision = revision
 	if config.Spec.Infrastructure != nil {
-		ready, err := r.workspaceReady(ctx, config.Namespace, config.Spec.Infrastructure.WorkspaceName)
+		ready, err := r.workspaceReady(ctx, config.Namespace, *config.Spec.Infrastructure, config.Spec.Target.Host)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -232,25 +233,28 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 }
 
-func (r *ConfigurationReconciler) workspaceReady(ctx context.Context, namespace, name string) (bool, error) {
-	obj := workspaceReadyObject(namespace, name)
-	if err := r.Reader.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, obj); err != nil {
+func (r *ConfigurationReconciler) workspaceReady(ctx context.Context, namespace string, reference configurationv1alpha1.InfrastructureRef, targetHost string) (bool, error) {
+	obj := workspaceReadyObject(namespace, reference.WorkspaceName)
+	if err := r.Reader.Get(ctx, types.NamespacedName{Namespace: namespace, Name: reference.WorkspaceName}, obj); err != nil {
 		if apierrors.IsNotFound(err) {
 			return false, nil
 		}
 		return false, err
 	}
-	conditions, found, err := unstructured.NestedSlice(obj.Object, "status", "conditions")
-	if err != nil || !found {
-		return false, err
+	if reference.WorkspaceGeneration > 0 && obj.GetGeneration() != reference.WorkspaceGeneration {
+		return false, nil
 	}
-	for _, item := range conditions {
-		condition, ok := item.(map[string]interface{})
-		if ok && condition["type"] == "Ready" && condition["status"] == "True" {
-			return true, nil
-		}
+	if reference.InfrastructureRevision != "" && obj.GetAnnotations()[workspaceRevisionAnnotation] != reference.InfrastructureRevision {
+		return false, nil
 	}
-	return false, nil
+	syncedGeneration, synced := workspaceConditionGeneration(obj, "Synced")
+	if !synced || syncedGeneration < obj.GetGeneration() || !workspaceConditionTrue(obj, "Ready") {
+		return false, nil
+	}
+	if reference.VMName != "" && !workspaceVMOutputMatches(obj, reference.VMName, reference.VMID, targetHost) {
+		return false, nil
+	}
+	return true, nil
 }
 
 func (r *ConfigurationReconciler) checkConcurrency(ctx context.Context, config *configurationv1alpha1.Configuration) (bool, error) {
@@ -295,7 +299,19 @@ func (r *ConfigurationReconciler) updateStatus(ctx context.Context, config *conf
 }
 
 func desiredRevision(spec configurationv1alpha1.ConfigurationSpec) (string, error) {
-	raw, err := json.Marshal(spec)
+	input := struct {
+		Target           configurationv1alpha1.TargetSpec  `json:"target"`
+		Ansible          configurationv1alpha1.AnsibleSpec `json:"ansible"`
+		VMName           string                            `json:"vmName,omitempty"`
+		VMID             int64                             `json:"vmID,omitempty"`
+		IdentityRevision string                            `json:"identityRevision,omitempty"`
+	}{Target: spec.Target, Ansible: spec.Ansible}
+	if spec.Infrastructure != nil {
+		input.VMName = spec.Infrastructure.VMName
+		input.VMID = spec.Infrastructure.VMID
+		input.IdentityRevision = spec.Infrastructure.IdentityRevision
+	}
+	raw, err := json.Marshal(input)
 	if err != nil {
 		return "", fmt.Errorf("marshal desired configuration: %w", err)
 	}
@@ -712,4 +728,109 @@ func workspaceReadyObject(namespace, name string) *unstructured.Unstructured {
 			"name":      name,
 		},
 	}}
+}
+
+func workspaceConditionTrue(obj *unstructured.Unstructured, conditionType string) bool {
+	conditions, found, err := unstructured.NestedSlice(obj.Object, "status", "conditions")
+	if err != nil || !found {
+		return false
+	}
+	for _, item := range conditions {
+		condition, ok := item.(map[string]interface{})
+		if ok && condition["type"] == conditionType {
+			return condition["status"] == string(metav1.ConditionTrue)
+		}
+	}
+	return false
+}
+
+func workspaceConditionGeneration(obj *unstructured.Unstructured, conditionType string) (int64, bool) {
+	conditions, found, err := unstructured.NestedSlice(obj.Object, "status", "conditions")
+	if err != nil || !found {
+		return 0, false
+	}
+	for _, item := range conditions {
+		condition, ok := item.(map[string]interface{})
+		if !ok || condition["type"] != conditionType || condition["status"] != string(metav1.ConditionTrue) {
+			continue
+		}
+		switch generation := condition["observedGeneration"].(type) {
+		case int64:
+			return generation, true
+		case int32:
+			return int64(generation), true
+		case int:
+			return int64(generation), true
+		case float64:
+			return int64(generation), true
+		case json.Number:
+			parsed, err := generation.Int64()
+			return parsed, err == nil
+		}
+	}
+	return 0, false
+}
+
+func workspaceVMOutputMatches(obj *unstructured.Unstructured, vmName string, vmID int64, targetHost string) bool {
+	outputs, found, err := unstructured.NestedMap(obj.Object, "status", "atProvider", "outputs", "vms", vmName)
+	if err != nil || !found || outputs == nil {
+		return false
+	}
+	id, ok := numericValue(outputs["vm_id"])
+	if !ok || id != vmID {
+		return false
+	}
+	addresses, found, err := unstructured.NestedFieldNoCopy(outputs, "ipv4_addresses")
+	if err != nil || !found {
+		return false
+	}
+	expectedIP := net.ParseIP(targetHost)
+	if expectedIP == nil {
+		if parsed, _, err := net.ParseCIDR(targetHost); err == nil {
+			expectedIP = parsed
+		}
+	}
+	return containsIP(addresses, expectedIP)
+}
+
+func numericValue(value interface{}) (int64, bool) {
+	switch number := value.(type) {
+	case int64:
+		return number, true
+	case int32:
+		return int64(number), true
+	case int:
+		return int64(number), true
+	case float64:
+		return int64(number), number == float64(int64(number))
+	case json.Number:
+		parsed, err := number.Int64()
+		return parsed, err == nil
+	default:
+		return 0, false
+	}
+}
+
+func containsIP(value interface{}, expected net.IP) bool {
+	switch item := value.(type) {
+	case string:
+		address := net.ParseIP(item)
+		if expected == nil {
+			return address != nil
+		}
+		return address != nil && address.Equal(expected)
+	case []interface{}:
+		for _, nested := range item {
+			if containsIP(nested, expected) {
+				return true
+			}
+		}
+	case map[string]interface{}:
+		for _, nested := range item {
+			if containsIP(nested, expected) {
+				return true
+			}
+		}
+	}
+	return false
 }

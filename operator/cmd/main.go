@@ -9,7 +9,10 @@ import (
 	"github.com/sarunasr/vpc-poc/operator/internal/controller"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -24,7 +27,7 @@ func main() {
 	var secureMetrics bool
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "Metrics listener address.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "Health probe listener address.")
-	flag.StringVar(&image, "ansible-image", "ghcr.io/sarunasr/vpc-poc-ansible-ee:1.0.6", "Immutable Ansible execution environment image.")
+	flag.StringVar(&image, "ansible-image", "ghcr.io/sarunasr/vpc-poc-ansible-ee:1.0.7", "Immutable Ansible execution environment image.")
 	flag.StringVar(&collectionVersions, "collection-versions", "homelab.web=1.0.0,homelab.system=1.0.0", "Collections and versions baked into the execution image.")
 	flag.BoolVar(&secureMetrics, "metrics-secure", true, "Serve metrics over HTTPS.")
 	opts := zap.Options{Development: false}
@@ -37,6 +40,10 @@ func main() {
 	utilruntime.Must(corev1.AddToScheme(scheme))
 	utilruntime.Must(batchv1.AddToScheme(scheme))
 	utilruntime.Must(configurationv1alpha1.AddToScheme(scheme))
+	workspaceGroupVersion := schema.GroupVersion{Group: "opentofu.m.upbound.io", Version: "v1beta1"}
+	scheme.AddKnownTypeWithName(workspaceGroupVersion.WithKind("Workspace"), &unstructured.Unstructured{})
+	scheme.AddKnownTypeWithName(workspaceGroupVersion.WithKind("WorkspaceList"), &unstructured.UnstructuredList{})
+	metav1.AddToGroupVersion(scheme, workspaceGroupVersion)
 
 	manager, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
@@ -68,6 +75,20 @@ func main() {
 		CollectionVersions: versions,
 	}).SetupWithManager(manager); err != nil {
 		ctrl.Log.Error(err, "unable to configure controller")
+		os.Exit(1)
+	}
+	if err := (&controller.DatacenterReconciler{
+		Client: manager.GetClient(),
+		Scheme: manager.GetScheme(),
+	}).SetupWithManager(manager); err != nil {
+		ctrl.Log.Error(err, "unable to configure Datacenter controller")
+		os.Exit(1)
+	}
+	if err := (&controller.VirtualMachineReconciler{
+		Client: manager.GetClient(),
+		Scheme: manager.GetScheme(),
+	}).SetupWithManager(manager); err != nil {
+		ctrl.Log.Error(err, "unable to configure VirtualMachine controller")
 		os.Exit(1)
 	}
 	if err := manager.AddHealthzCheck("healthz", healthz.Ping); err != nil {

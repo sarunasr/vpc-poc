@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -9,6 +10,10 @@ import (
 	configurationv1alpha1 "github.com/sarunasr/vpc-poc/operator/api/v1alpha1"
 	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestDesiredRevisionIsStableAcrossMapOrdering(t *testing.T) {
@@ -72,6 +77,287 @@ func TestDesiredRevisionChangesWithProxyJump(t *testing.T) {
 	}
 	if directRevision == jumpRevision {
 		t.Fatal("proxy jump changes did not change configuration revision")
+	}
+}
+
+func TestDesiredRevisionIgnoresScheduleAndInfrastructureRevision(t *testing.T) {
+	spec := configurationv1alpha1.ConfigurationSpec{
+		Target:         configurationv1alpha1.TargetSpec{Host: "10.0.0.1", User: "debian", SSHSecretRef: "vm-ssh"},
+		Ansible:        configurationv1alpha1.AnsibleSpec{Roles: []configurationv1alpha1.RoleSpec{{Name: "homelab.web.nginx"}}},
+		Reconciliation: configurationv1alpha1.ReconciliationSpec{OnChange: true},
+		Execution:      configurationv1alpha1.ExecutionSpec{MaxConcurrent: 2},
+		Infrastructure: &configurationv1alpha1.InfrastructureRef{
+			WorkspaceName: "dc1", InfrastructureRevision: strings.Repeat("a", 64),
+			IdentityRevision:    strings.Repeat("c", 64),
+			WorkspaceGeneration: 3, VMName: "web01", VMID: 201,
+		},
+	}
+	first, err := desiredRevision(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec.Reconciliation.Schedule = &configurationv1alpha1.ScheduleSpec{Type: "interval", Duration: "24h"}
+	spec.Reconciliation.OnChange = false
+	spec.Execution.MaxConcurrent = 8
+	spec.Infrastructure.InfrastructureRevision = strings.Repeat("b", 64)
+	spec.Infrastructure.WorkspaceGeneration = 7
+	second, err := desiredRevision(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != second {
+		t.Fatal("schedule, execution limits, or infrastructure generation changed the Ansible revision")
+	}
+	spec.Infrastructure.IdentityRevision = strings.Repeat("d", 64)
+	identityChangedRevision, err := desiredRevision(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second == identityChangedRevision {
+		t.Fatal("VM identity revision changes did not trigger configuration reconciliation")
+	}
+}
+
+func TestAggregateVirtualMachinesBuildsCompleteMapAndMergesDefaults(t *testing.T) {
+	datacenter := &configurationv1alpha1.Datacenter{
+		ObjectMeta: metav1.ObjectMeta{Name: "dc1"},
+		Spec: configurationv1alpha1.DatacenterSpec{
+			Proxmox: configurationv1alpha1.DatacenterProxmoxSpec{DefaultNode: "pve01", DefaultTemplate: 9000},
+			VMDefaults: configurationv1alpha1.VirtualMachineDefaults{
+				Cores: 2, MemoryMB: 4096, DiskSizeGB: 32, Bridge: "vmbr0",
+				Gateway: "10.10.10.1", DNSServers: []string{"1.1.1.1"}, CloudInitUser: "debian",
+			},
+			Ansible: configurationv1alpha1.DatacenterAnsibleSpec{
+				Defaults: configurationv1alpha1.VirtualMachineTargetSpec{
+					User: "debian", SSHSecretRef: "vm-ssh",
+					ProxyJump: &configurationv1alpha1.ProxyJumpSpec{Host: "jump.example.test", User: "root", SSHSecretRef: "jump-ssh"},
+				},
+				Reconciliation: &configurationv1alpha1.DatacenterReconciliationSpec{
+					OnChange: boolPointer(true), Schedule: &configurationv1alpha1.ScheduleSpec{Type: "interval", Duration: "24h"},
+				},
+			},
+		},
+	}
+	virtualMachines := []configurationv1alpha1.VirtualMachine{
+		{ObjectMeta: metav1.ObjectMeta{Name: "web02"}, Spec: configurationv1alpha1.VirtualMachineSpec{
+			DatacenterRef: "dc1", VM: configurationv1alpha1.VirtualMachineInfrastructure{VMID: 202, IPv4CIDR: "10.10.10.22/24"},
+			Ansible: configurationv1alpha1.AnsibleSpec{Collections: []configurationv1alpha1.CollectionSpec{{Name: "homelab.web", Version: "1.0.0"}}, Roles: []configurationv1alpha1.RoleSpec{{Name: "homelab.web.nginx"}}},
+		}},
+		{ObjectMeta: metav1.ObjectMeta{Name: "web01"}, Spec: configurationv1alpha1.VirtualMachineSpec{
+			DatacenterRef: "dc1", VM: configurationv1alpha1.VirtualMachineInfrastructure{
+				Name: "gitops-poc-201", VMID: 201, Cores: 1, IPv4CIDR: "10.10.10.21/24",
+			},
+			Ansible: configurationv1alpha1.AnsibleSpec{Collections: []configurationv1alpha1.CollectionSpec{{Name: "homelab.web", Version: "1.0.0"}}, Roles: []configurationv1alpha1.RoleSpec{{Name: "homelab.web.nginx"}}},
+		}},
+	}
+	inputs, resolved, err := aggregateVirtualMachines(datacenter, virtualMachines)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(inputs) != 2 || len(resolved) != 2 {
+		t.Fatalf("aggregated %d inputs and %d resolved VMs, want two each", len(inputs), len(resolved))
+	}
+	web01 := inputs["web01"].(map[string]interface{})
+	if web01["vm_id"] != int64(201) || web01["name"] != "gitops-poc-201" || web01["cores"] != int32(1) {
+		t.Fatalf("web01 overrides were not applied: %#v", web01)
+	}
+	web02 := inputs["web02"].(map[string]interface{})
+	if web02["vm_id"] != int64(202) || web02["node_name"] != "pve01" || web02["template_id"] != int64(9000) ||
+		web02["cores"] != int32(2) || web02["memory_mb"] != int64(4096) || web02["ipv4_cidr"] != "10.10.10.22/24" {
+		t.Fatalf("web02 defaults were not applied: %#v", web02)
+	}
+	if resolved["web02"].configuration.Target.Host != "10.10.10.22" ||
+		resolved["web02"].configuration.Target.ProxyJump == nil ||
+		resolved["web02"].configuration.Reconciliation.Schedule.Duration != "24h" {
+		t.Fatalf("Ansible defaults were not inherited: %+v", resolved["web02"].configuration)
+	}
+	reversed := []configurationv1alpha1.VirtualMachine{virtualMachines[1], virtualMachines[0]}
+	reversedInputs, _, err := aggregateVirtualMachines(datacenter, reversed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstJSON, _ := json.Marshal(inputs)
+	secondJSON, _ := json.Marshal(reversedInputs)
+	if string(firstJSON) != string(secondJSON) {
+		t.Fatalf("VM list order changed the effective input map: %s != %s", firstJSON, secondJSON)
+	}
+}
+
+func TestAggregateVirtualMachinesRejectsDuplicateVMIDsWithinDatacenter(t *testing.T) {
+	datacenter := &configurationv1alpha1.Datacenter{
+		ObjectMeta: metav1.ObjectMeta{Name: "dc1"},
+		Spec: configurationv1alpha1.DatacenterSpec{
+			Proxmox:    configurationv1alpha1.DatacenterProxmoxSpec{DefaultNode: "pve01", DefaultTemplate: 9000},
+			VMDefaults: configurationv1alpha1.VirtualMachineDefaults{Cores: 1, MemoryMB: 1024, DiskSizeGB: 8, Bridge: "vmbr0", Gateway: "10.0.0.1", CloudInitUser: "debian"},
+			Ansible:    configurationv1alpha1.DatacenterAnsibleSpec{Defaults: configurationv1alpha1.VirtualMachineTargetSpec{User: "debian", SSHSecretRef: "vm-ssh"}},
+		},
+	}
+	virtualMachines := []configurationv1alpha1.VirtualMachine{
+		{ObjectMeta: metav1.ObjectMeta{Name: "web01"}, Spec: configurationv1alpha1.VirtualMachineSpec{DatacenterRef: "dc1", VM: configurationv1alpha1.VirtualMachineInfrastructure{VMID: 201, IPv4CIDR: "10.0.0.21/24"}}},
+		{ObjectMeta: metav1.ObjectMeta{Name: "web02"}, Spec: configurationv1alpha1.VirtualMachineSpec{DatacenterRef: "dc1", VM: configurationv1alpha1.VirtualMachineInfrastructure{VMID: 201, IPv4CIDR: "10.0.0.22/24"}}},
+	}
+	if _, _, err := aggregateVirtualMachines(datacenter, virtualMachines); err == nil {
+		t.Fatal("expected duplicate Proxmox VM IDs in one Datacenter to be rejected")
+	}
+	virtualMachines[1].Spec.DatacenterRef = "dc2"
+	if _, _, err := aggregateVirtualMachines(datacenter, virtualMachines); err != nil {
+		t.Fatalf("duplicate VM IDs in separate Datacenters should be independent: %v", err)
+	}
+}
+
+func TestResolveReconciliationDefaultsOnChangeAndAllowsFalseOverride(t *testing.T) {
+	schedule := &configurationv1alpha1.ScheduleSpec{Type: "interval", Duration: "24h"}
+	defaults := &configurationv1alpha1.DatacenterReconciliationSpec{Schedule: schedule}
+	resolved := resolveReconciliation(defaults, nil)
+	if !resolved.OnChange || resolved.Schedule == nil || resolved.Schedule.Duration != "24h" {
+		t.Fatalf("Datacenter defaults should retain onChange=true and its schedule: %+v", resolved)
+	}
+	disabled := false
+	resolved = resolveReconciliation(defaults, &configurationv1alpha1.VirtualMachineReconciliationSpec{OnChange: &disabled})
+	if resolved.OnChange {
+		t.Fatal("explicit VirtualMachine onChange=false was ignored")
+	}
+}
+
+func TestResolveExecutionMergesPartialDefaultsAndOverrides(t *testing.T) {
+	defaults := &configurationv1alpha1.ExecutionSpec{Timeout: metav1.Duration{Duration: 10 * time.Minute}}
+	resolved := resolveExecution(defaults, nil)
+	if resolved.MaxConcurrent != 2 || resolved.Timeout.Duration != 10*time.Minute || resolved.MaxRetries != 3 {
+		t.Fatalf("partial Datacenter execution defaults did not preserve built-in defaults: %+v", resolved)
+	}
+	overrides := &configurationv1alpha1.ExecutionSpec{MaxConcurrent: 4}
+	resolved = resolveExecution(defaults, overrides)
+	if resolved.MaxConcurrent != 4 || resolved.Timeout.Duration != 10*time.Minute || resolved.MaxRetries != 3 {
+		t.Fatalf("VirtualMachine execution overrides did not merge correctly: %+v", resolved)
+	}
+}
+
+func TestVirtualMachineIdentityRevisionTracksRecreationInputs(t *testing.T) {
+	module := configurationv1alpha1.TerraformModuleSpec{Source: "git::ssh://git@example.test/repo.git", Version: "v1.0.0"}
+	infrastructure := configurationv1alpha1.VirtualMachineInfrastructure{
+		Name: "web01", VMID: 201, NodeName: "pve01", TemplateID: 9000,
+		Cores: 1, MemoryMB: 1024, IPv4CIDR: "10.0.0.21/24",
+	}
+	initial, err := virtualMachineIdentityRevision(module, infrastructure)
+	if err != nil {
+		t.Fatal(err)
+	}
+	infrastructure.Cores = 4
+	infrastructure.MemoryMB = 8192
+	unchanged, err := virtualMachineIdentityRevision(module, infrastructure)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if initial != unchanged {
+		t.Fatal("CPU or memory changes unexpectedly changed the VM identity revision")
+	}
+	infrastructure.TemplateID = 9001
+	recreated, err := virtualMachineIdentityRevision(module, infrastructure)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if initial == recreated {
+		t.Fatal("template changes did not change the VM identity revision")
+	}
+}
+
+func TestPinnedModuleReferenceUsesDeclaredVersion(t *testing.T) {
+	module := configurationv1alpha1.TerraformModuleSpec{
+		Source: "git::ssh://git@github.com/example/repo.git", Version: "0123456789abcdef0123456789abcdef01234567",
+	}
+	got, err := pinnedModuleReference(module)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != module.Source+"?ref="+module.Version {
+		t.Fatalf("module reference = %q", got)
+	}
+	module.Source += "?ref=main"
+	if _, err := pinnedModuleReference(module); err == nil {
+		t.Fatal("expected source URLs with a preexisting ref to be rejected")
+	}
+}
+
+func TestWorkspaceVMOutputRequiresMatchingIdentityAndIP(t *testing.T) {
+	workspace := &unstructured.Unstructured{Object: map[string]interface{}{
+		"status": map[string]interface{}{
+			"atProvider": map[string]interface{}{
+				"outputs": map[string]interface{}{
+					"vms": map[string]interface{}{
+						"web01": map[string]interface{}{
+							"vm_id":          int64(201),
+							"ipv4_addresses": []interface{}{[]interface{}{"127.0.0.1"}, []interface{}{"10.10.10.21"}},
+						},
+					},
+				},
+			},
+		},
+	}}
+	if !workspaceVMOutputMatches(workspace, "web01", 201, "10.10.10.21") {
+		t.Fatal("expected matching VM identity and IP output to be ready")
+	}
+	if workspaceVMOutputMatches(workspace, "web01", 202, "10.10.10.21") ||
+		workspaceVMOutputMatches(workspace, "web01", 201, "10.10.10.22") ||
+		workspaceVMOutputMatches(workspace, "web02", 201, "10.10.10.21") {
+		t.Fatal("mismatched VM identity or IP was reported ready")
+	}
+	if !workspaceVMOutputMatches(workspace, "web01", 201, "web01.example.test") {
+		t.Fatal("expected a declared hostname to be ready when the Workspace reports a valid IP")
+	}
+	workspaceWithoutIP := workspace.DeepCopy()
+	unstructured.RemoveNestedField(workspaceWithoutIP.Object, "status", "atProvider", "outputs", "vms", "web01", "ipv4_addresses")
+	if workspaceVMOutputMatches(workspaceWithoutIP, "web01", 201, "web01.example.test") {
+		t.Fatal("hostname-only readiness was reported without an infrastructure IP output")
+	}
+}
+
+func TestWorkspaceReadyRequiresCurrentGenerationRevisionAndVMOutput(t *testing.T) {
+	scheme := runtime.NewScheme()
+	workspaceGV := schema.GroupVersion{Group: "opentofu.m.upbound.io", Version: "v1beta1"}
+	scheme.AddKnownTypeWithName(workspaceGV.WithKind("Workspace"), &unstructured.Unstructured{})
+	scheme.AddKnownTypeWithName(workspaceGV.WithKind("WorkspaceList"), &unstructured.UnstructuredList{})
+	metav1.AddToGroupVersion(scheme, workspaceGV)
+
+	workspace := workspaceReadyObject("infrastructure", "homelab")
+	workspace.SetGeneration(5)
+	workspace.SetAnnotations(map[string]string{workspaceRevisionAnnotation: "revision-5"})
+	workspace.Object["status"] = map[string]interface{}{
+		"conditions": []interface{}{
+			map[string]interface{}{"type": "Synced", "status": "True", "observedGeneration": int64(5)},
+			map[string]interface{}{"type": "Ready", "status": "True"},
+		},
+		"atProvider": map[string]interface{}{
+			"outputs": map[string]interface{}{
+				"vms": map[string]interface{}{
+					"web01": map[string]interface{}{
+						"vm_id":          int64(201),
+						"ipv4_addresses": []interface{}{[]interface{}{"10.10.10.21"}},
+					},
+				},
+			},
+		},
+	}
+	reader := fake.NewClientBuilder().WithScheme(scheme).WithObjects(workspace).Build()
+	reconciler := &ConfigurationReconciler{Reader: reader}
+	reference := configurationv1alpha1.InfrastructureRef{
+		WorkspaceName: "homelab", InfrastructureRevision: "revision-5",
+		WorkspaceGeneration: 5, VMName: "web01", VMID: 201,
+	}
+	ready, err := reconciler.workspaceReady(context.Background(), "infrastructure", reference, "10.10.10.21")
+	if err != nil || !ready {
+		t.Fatalf("expected current Workspace generation to be ready, ready=%t err=%v", ready, err)
+	}
+
+	reference.InfrastructureRevision = "stale-revision"
+	ready, err = reconciler.workspaceReady(context.Background(), "infrastructure", reference, "10.10.10.21")
+	if err != nil || ready {
+		t.Fatalf("stale infrastructure revision reported ready, ready=%t err=%v", ready, err)
+	}
+	reference.InfrastructureRevision = "revision-5"
+	reference.WorkspaceGeneration = 4
+	ready, err = reconciler.workspaceReady(context.Background(), "infrastructure", reference, "10.10.10.21")
+	if err != nil || ready {
+		t.Fatalf("stale Workspace generation reported ready, ready=%t err=%v", ready, err)
 	}
 }
 

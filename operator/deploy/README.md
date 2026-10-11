@@ -1,7 +1,10 @@
-# Operator deployment resources
+# Optional Configuration samples
 
-Argo CD's root Application syncs the CRD and controller resources in this
-directory once the operator image has been published to GHCR. The sample
-Configuration is intentionally not auto-synced: create it only after the
-Proxmox Workspace, VM, VM SSH Secret, optional jump-host SSH Secret, and
-execution image are ready.
+The controller's CRDs, RBAC, and Deployment are managed from
+[`apps/operator`](../../apps/operator). VirtualMachine resources now generate
+their own Configuration resources; do not apply a standalone Configuration
+for a VM already managed by a VirtualMachine.
+
+These files remain as examples for independent/static Ansible targets and are
+not synchronized by Argo CD. Configure their SSH Secrets and infrastructure
+readiness before applying one manually.

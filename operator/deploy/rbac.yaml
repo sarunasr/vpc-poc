@@ -15,6 +15,7 @@ rules:
     resources:
       - configurations
     verbs:
+      - create
       - get
       - list
       - watch
@@ -26,6 +27,19 @@ rules:
       - configurations/status
     verbs:
       - get
+      - patch
+      - update
+  - apiGroups:
+      - infra.example.io
+    resources:
+      - datacenters
+      - datacenters/status
+      - virtualmachines
+      - virtualmachines/status
+    verbs:
+      - get
+      - list
+      - watch
       - patch
       - update
   - apiGroups:
@@ -62,6 +76,11 @@ rules:
       - workspaces
     verbs:
       - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
   - apiGroups:
       - ""
     resources:

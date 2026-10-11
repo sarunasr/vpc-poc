@@ -1,14 +1,10 @@
-output "vm_id" {
-  description = "Managed Proxmox VM ID."
-  value       = module.vm.vm_id
-}
-
-output "vm_name" {
-  description = "Managed VM hostname."
-  value       = module.vm.name
-}
-
-output "vm_ipv4_addresses" {
-  description = "VM IPv4 addresses reported by the guest agent."
-  value       = module.vm.ipv4_addresses
+output "vms" {
+  description = "Managed VMs keyed by their stable VirtualMachine names."
+  value = {
+    for name, vm in module.vms : name => {
+      vm_id          = vm.vm_id
+      name           = vm.name
+      ipv4_addresses = vm.ipv4_addresses
+    }
+  }
 }
