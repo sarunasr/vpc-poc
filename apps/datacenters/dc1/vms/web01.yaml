@@ -19,7 +19,7 @@ spec:
     # Optional per-VM hardware overrides; positive integers. Defaults are in
     # Datacenter spec.vmDefaults.
     # cores: 1
-    memory_mb: 1152
+    memory_mb: 1024
     # disk_size_gb: 8
     # Optional network and cloud-init overrides; inherit Datacenter defaults.
     # bridge: vmbr0
@@ -51,7 +51,7 @@ spec:
     # Role name is namespace.collection.role. Optional vars are passed to the
     # role as a mapping, for example: vars: {listen_port: 8080}.
     roles:
-      # - name: homelab.web.nginx
+      - name: homelab.web.nginx
       - name: homelab.system.textfile
     # true or false; when true, supported cleanup runs for removed roles.
     lifecycle:
