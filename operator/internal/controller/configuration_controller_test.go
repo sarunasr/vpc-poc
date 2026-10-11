@@ -158,12 +158,12 @@ func TestAggregateVirtualMachinesBuildsCompleteMapAndMergesDefaults(t *testing.T
 		t.Fatalf("aggregated %d inputs and %d resolved VMs, want two each", len(inputs), len(resolved))
 	}
 	web01 := inputs["web01"].(map[string]interface{})
-	if web01["vm_id"] != int64(201) || web01["name"] != "gitops-poc-201" || web01["cores"] != int32(1) {
+	if web01["vm_id"] != int64(201) || web01["name"] != "gitops-poc-201" || web01["cores"] != int64(1) {
 		t.Fatalf("web01 overrides were not applied: %#v", web01)
 	}
 	web02 := inputs["web02"].(map[string]interface{})
 	if web02["vm_id"] != int64(202) || web02["node_name"] != "pve01" || web02["template_id"] != int64(9000) ||
-		web02["cores"] != int32(2) || web02["memory_mb"] != int64(4096) || web02["ipv4_cidr"] != "10.10.10.22/24" {
+		web02["cores"] != int64(2) || web02["memory_mb"] != int64(4096) || web02["ipv4_cidr"] != "10.10.10.22/24" {
 		t.Fatalf("web02 defaults were not applied: %#v", web02)
 	}
 	if resolved["web02"].configuration.Target.Host != "10.10.10.22" ||

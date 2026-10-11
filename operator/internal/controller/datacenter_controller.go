@@ -245,18 +245,22 @@ func resolveVirtualMachine(datacenter *configurationv1alpha1.Datacenter, vm *con
 }
 
 func terraformVMInput(vm configurationv1alpha1.VirtualMachineInfrastructure) map[string]interface{} {
+	dnsServers := make([]interface{}, len(vm.DNSServers))
+	for i, server := range vm.DNSServers {
+		dnsServers[i] = server
+	}
 	return map[string]interface{}{
 		"name":            vm.Name,
 		"vm_id":           vm.VMID,
 		"node_name":       vm.NodeName,
 		"template_id":     vm.TemplateID,
-		"cores":           vm.Cores,
+		"cores":           int64(vm.Cores),
 		"memory_mb":       vm.MemoryMB,
 		"disk_size_gb":    vm.DiskSizeGB,
 		"bridge":          vm.Bridge,
 		"ipv4_cidr":       vm.IPv4CIDR,
 		"gateway":         vm.Gateway,
-		"dns_servers":     vm.DNSServers,
+		"dns_servers":     dnsServers,
 		"cloud_init_user": vm.CloudInitUser,
 	}
 }

@@ -22,7 +22,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: manager
-          image: ghcr.io/sarunasr/vpc-poc-operator:1.0.7
+          image: ghcr.io/sarunasr/vpc-poc-operator:1.0.8
           imagePullPolicy: IfNotPresent
           args:
             - --metrics-bind-address=0

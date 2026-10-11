@@ -47,8 +47,18 @@ func TestEnsureWorkspaceAdoptsAndUpdatesCompleteVMMap(t *testing.T) {
 	}
 
 	fullVMMap := map[string]interface{}{
-		"web01": map[string]interface{}{"vm_id": int64(201)},
-		"web02": map[string]interface{}{"vm_id": int64(202)},
+		"web01": terraformVMInput(configurationv1alpha1.VirtualMachineInfrastructure{
+			Name: "gitops-poc-201", VMID: 201, NodeName: "node1", TemplateID: 9000,
+			Cores: 1, MemoryMB: 1024, DiskSizeGB: 8, Bridge: "vmbr0",
+			IPv4CIDR: "10.10.10.21/24", Gateway: "10.10.10.1",
+			DNSServers: []string{"1.1.1.1"}, CloudInitUser: "debian",
+		}),
+		"web02": terraformVMInput(configurationv1alpha1.VirtualMachineInfrastructure{
+			Name: "gitops-poc-202", VMID: 202, NodeName: "node1", TemplateID: 9000,
+			Cores: 1, MemoryMB: 1024, DiskSizeGB: 8, Bridge: "vmbr0",
+			IPv4CIDR: "10.10.10.22/24", Gateway: "10.10.10.1",
+			DNSServers: []string{"1.1.1.1"}, CloudInitUser: "debian",
+		}),
 	}
 	revision := "expected-revision"
 	workspace, err := r.ensureWorkspace(ctx, datacenter, fullVMMap, revision)
@@ -58,6 +68,17 @@ func TestEnsureWorkspaceAdoptsAndUpdatesCompleteVMMap(t *testing.T) {
 	varmap, found, err := unstructured.NestedMap(workspace.Object, "spec", "forProvider", "varmap", "vms")
 	if err != nil || !found || len(varmap) != 2 {
 		t.Fatalf("Workspace did not receive the complete VM map: %#v, found=%t, err=%v", varmap, found, err)
+	}
+	web01, ok := varmap["web01"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Workspace VM input has unexpected type: %#v", varmap["web01"])
+	}
+	if cores, ok := web01["cores"].(int64); !ok || cores != 1 {
+		t.Fatalf("Workspace VM input did not use a JSON-compatible core count: %#v", web01["cores"])
+	}
+	dnsServers, ok := web01["dns_servers"].([]interface{})
+	if !ok || len(dnsServers) != 1 || dnsServers[0] != "1.1.1.1" {
+		t.Fatalf("Workspace VM input did not preserve DNS server list: %#v", web01["dns_servers"])
 	}
 	if workspace.GetAnnotations()["argocd.argoproj.io/tracking-id"] == "" {
 		t.Fatal("Workspace adoption removed Argo CD tracking metadata")
