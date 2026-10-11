@@ -5,17 +5,25 @@ This record distinguishes completed end-to-end checks from remaining work.
 ## Unified Datacenter/VirtualMachine refactor
 
 The refactor is committed as `720ed2558aed0115ae8c4c9a7f4715027f6fd803`,
-tagged `v1.0.7`, and its operator and Ansible Runner images were published
-successfully. The v1.0.7 operator is running in the cluster, and the
-Datacenter and VirtualMachine CRDs are established. The root Argo Application
-is Synced/Healthy and no longer tracks the legacy Workspace manifest.
+tagged `v1.0.7`, with the initial `dc1` and `web01` declarations committed as
+`9c0ec57da37a301f26605b0423c413ed69b91735`. The first live reconcile exposed
+a v1.0.7 panic when copying typed `int32` VM inputs into an unstructured
+Workspace. That was fixed and regression-tested in `v1.0.8`, commit
+`3253d7f4ce1a54fac3fd1407ab9c62033e7d4fb6`.
 
-The existing `infrastructure/homelab` Workspace remains Ready at generation 5
-with its existing state intact and `Prune=false`. The Datacenter and `web01`
-manifests have not yet been applied, so the Workspace state-address migration
-and controller adoption have not yet been exercised. No Datacenter or
-VirtualMachine resources have been created in the live cluster as part of
-this refactor.
+The v1.0.8 images were published successfully and the operator is running
+with one ready replica. The root Argo Application is Synced/Healthy and no
+longer tracks the legacy Workspace manifest. Datacenter adoption updated the
+existing `infrastructure/homelab` Workspace from generation 5 to generation
+6; it is Synced/Ready and reports VMID `201` at `10.10.10.21`. The Datacenter
+and `web01` report Ready, and the first Datacenter-managed Ansible Job
+(`web01-cc8ec54c-7c2169-1`) completed successfully. `Prune=false` remains on
+the Workspace as an additional safeguard.
+
+The live Workspace generation and outputs confirm that the complete `web01`
+map reconciled and that the expected VM identity and address are present.
+Provider logs did not expose an OpenTofu plan summary, so a zero-change/no-
+replacement plan was not independently recorded.
 
 Locally verified:
 
@@ -30,16 +38,18 @@ Locally verified:
   manifests and the updated root Argo Application using only
   `$HOME/.kube/config-vpc-poc`.
 - `git diff --check` passes.
-- The live Workspace is still `infrastructure/homelab`, generation 5, with
+- The live Workspace is `infrastructure/homelab`, generation 6, with
   `Synced=True` and `Ready=True`; it is no longer tracked by the root Argo
-  Application. `Prune=false` remains as an additional safeguard. The one-time
-  state migration has not been executed.
+  Application. Its `web01` outputs report VMID `201` and address
+  `10.10.10.21`.
+- The live Datacenter and `web01` are Ready. The derived Configuration's
+  applied revision matches its desired revision after the successful Job
+  `web01-cc8ec54c-7c2169-1`.
 
-Still to verify after deployment:
+Still to verify in the live POC:
 
-- Datacenter adoption updates the existing Workspace without replacing VM
-  201, and OpenTofu migrates `module.vm` to `module.vms["web01"]` in place.
-- Datacenter/VM controller status and derived Configuration work end to end.
+- Capture an OpenTofu plan or equivalent provider evidence confirming the
+  `module.vm` to `module.vms["web01"]` state move requires no VM replacement.
 - VM 202 provisioning/Ansible: this must wait until the Proxmox token ACL
   includes VMID 202 and the restricted jump key permits `10.10.10.22:22`.
 - CPU/RAM-only edits avoid unnecessary Ansible; collection/role changes
@@ -91,8 +101,16 @@ Still to verify after deployment:
   with `onChange: true`, both roles, and its 24-hour schedule. No active
   Ansible Job remains.
 - The v1.0.7 GitHub Actions image-publish workflow succeeded, Argo CD rolled
-  out the v1.0.7 controller with one ready replica, and the root Application
-  is Synced/Healthy at commit `720ed2558aed0115ae8c4c9a7f4715027f6fd803`.
+  out the v1.0.7 controller before Datacenter adoption, and the new
+  Datacenter and VirtualMachine CRDs were established.
+- The initial live Datacenter reconcile on v1.0.7 panicked on `int32` VM
+  values before changing the Workspace. v1.0.8 converts the VM core count and
+  DNS list to JSON-compatible unstructured values; focused controller tests
+  cover Workspace adoption, repeated no-op reconciliation, and these VM
+  fields.
+- The v1.0.8 GitHub Actions image-publish workflow succeeded, Argo CD rolled
+  out the v1.0.8 controller with one ready replica, and the root Application
+  is Synced/Healthy at commit `3253d7f4ce1a54fac3fd1407ab9c62033e7d4fb6`.
   The new Datacenter and VirtualMachine CRDs are established.
 - Before this refactor, `go test ./...`, `go vet ./...`, `make test`, and
   `git diff --check` passed. The previous Configuration CRD, RBAC, Deployment,
