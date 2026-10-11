@@ -4,9 +4,18 @@ This record distinguishes completed end-to-end checks from remaining work.
 
 ## Unified Datacenter/VirtualMachine refactor
 
-The refactor has local automated validation, but it has **not yet been pushed
-or applied to the cluster**. No Datacenter or VirtualMachine resources for the
-new API have been created in the live cluster as part of this change.
+The refactor is committed as `720ed2558aed0115ae8c4c9a7f4715027f6fd803`,
+tagged `v1.0.7`, and its operator and Ansible Runner images were published
+successfully. The v1.0.7 operator is running in the cluster, and the
+Datacenter and VirtualMachine CRDs are established. The root Argo Application
+is Synced/Healthy and no longer tracks the legacy Workspace manifest.
+
+The existing `infrastructure/homelab` Workspace remains Ready at generation 5
+with its existing state intact and `Prune=false`. The Datacenter and `web01`
+manifests have not yet been applied, so the Workspace state-address migration
+and controller adoption have not yet been exercised. No Datacenter or
+VirtualMachine resources have been created in the live cluster as part of
+this refactor.
 
 Locally verified:
 
@@ -21,15 +30,15 @@ Locally verified:
   manifests and the updated root Argo Application using only
   `$HOME/.kube/config-vpc-poc`.
 - `git diff --check` passes.
-- The live Workspace is still `infrastructure/homelab`, generation 5, and
-  remains managed by the current Argo Application. The one-time migration has
-  not been executed.
+- The live Workspace is still `infrastructure/homelab`, generation 5, with
+  `Synced=True` and `Ready=True`; it is no longer tracked by the root Argo
+  Application. `Prune=false` remains as an additional safeguard. The one-time
+  state migration has not been executed.
 
 Still to verify after deployment:
 
-- Argo installs CRDs before the operator and VM resources.
-- Existing Workspace state migrates from `module.vm` to
-  `module.vms["web01"]` without replacing VM 201.
+- Datacenter adoption updates the existing Workspace without replacing VM
+  201, and OpenTofu migrates `module.vm` to `module.vms["web01"]` in place.
 - Datacenter/VM controller status and derived Configuration work end to end.
 - VM 202 provisioning/Ansible: this must wait until the Proxmox token ACL
   includes VMID 202 and the restricted jump key permits `10.10.10.22:22`.
@@ -81,6 +90,10 @@ Still to verify after deployment:
   out the v1.0.6 controller, and the final `web01` Configuration is Synced
   with `onChange: true`, both roles, and its 24-hour schedule. No active
   Ansible Job remains.
+- The v1.0.7 GitHub Actions image-publish workflow succeeded, Argo CD rolled
+  out the v1.0.7 controller with one ready replica, and the root Application
+  is Synced/Healthy at commit `720ed2558aed0115ae8c4c9a7f4715027f6fd803`.
+  The new Datacenter and VirtualMachine CRDs are established.
 - Before this refactor, `go test ./...`, `go vet ./...`, `make test`, and
   `git diff --check` passed. The previous Configuration CRD, RBAC, Deployment,
   and sample Configuration passed Kubernetes dry-run validation.

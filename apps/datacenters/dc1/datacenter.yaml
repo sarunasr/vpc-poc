@@ -1,0 +1,52 @@
+apiVersion: infra.example.io/v1alpha1
+kind: Datacenter
+metadata:
+  name: dc1
+  namespace: infrastructure
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  terraform:
+    workspaceName: homelab
+    module:
+      source: git::ssh://git@github.com/sarunasr/vpc-poc.git
+      version: 720ed2558aed0115ae8c4c9a7f4715027f6fd803
+      entrypoint: terraform/environments/homelab
+    providerConfigRef:
+      kind: ProviderConfig
+      name: default
+    proxmoxAPIToken:
+      name: proxmox-credentials
+      key: api-token
+    sshPublicKeys:
+      name: homelab-vm-ssh
+      key: ssh-public-keys
+  proxmox:
+    defaultNode: srv2050453
+    defaultTemplate: 9000
+  vmDefaults:
+    cores: 1
+    memory_mb: 1024
+    disk_size_gb: 8
+    bridge: vmbr0
+    gateway: 10.10.10.1
+    dns_servers:
+      - 1.1.1.1
+    cloud_init_user: debian
+  ansible:
+    defaults:
+      user: debian
+      sshSecretRef: homelab-vm-ssh
+      proxyJump:
+        host: 185.170.196.225
+        user: root
+        sshSecretRef: proxmox-ansible-jump
+    reconciliation:
+      onChange: true
+      schedule:
+        type: interval
+        duration: 24h
+    execution:
+      maxConcurrent: 2
+      timeout: 30m
+      maxRetries: 3

@@ -1,0 +1,24 @@
+apiVersion: infra.example.io/v1alpha1
+kind: VirtualMachine
+metadata:
+  name: web01
+  namespace: infrastructure
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  datacenterRef: dc1
+  vm:
+    name: gitops-poc-201
+    vm_id: 201
+    ipv4_cidr: 10.10.10.21/24
+  ansible:
+    collections:
+      - name: homelab.web
+        version: 1.0.0
+      - name: homelab.system
+        version: 1.0.0
+    roles:
+      - name: homelab.web.nginx
+      - name: homelab.system.textfile
+    lifecycle:
+      uninstallRemovedRoles: true
